@@ -74,10 +74,10 @@ export default function AttendancePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attendance", selectedSession] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({ title: "Attendance saved successfully" });
+      toast({ title: "Presences enregistrees avec succes" });
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to save attendance", description: error.message, variant: "destructive" });
+      toast({ title: "Erreur lors de l'enregistrement", description: error.message, variant: "destructive" });
     },
   });
 
@@ -126,23 +126,23 @@ export default function AttendancePage() {
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-attendance-title">Attendance</h1>
+        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-attendance-title">Presences</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Mark student attendance for each session
+          Marquer la presence des eleves pour chaque seance
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Select Session</CardTitle>
+          <CardTitle className="text-base">Selectionner une seance</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Training</label>
+              <label className="text-sm font-medium text-muted-foreground">Formation</label>
               <Select value={selectedTraining} onValueChange={handleTrainingChange}>
                 <SelectTrigger data-testid="select-training">
-                  <SelectValue placeholder="Select training" />
+                  <SelectValue placeholder="Choisir une formation" />
                 </SelectTrigger>
                 <SelectContent>
                   {trainingOptions.map((t) => (
@@ -154,38 +154,38 @@ export default function AttendancePage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Level</label>
+              <label className="text-sm font-medium text-muted-foreground">Niveau</label>
               <Select
                 value={selectedLevel}
                 onValueChange={handleLevelChange}
                 disabled={!currentTraining}
               >
                 <SelectTrigger data-testid="select-level">
-                  <SelectValue placeholder="Select level" />
+                  <SelectValue placeholder="Choisir un niveau" />
                 </SelectTrigger>
                 <SelectContent>
                   {currentTraining?.levels.map((l) => (
                     <SelectItem key={l.id} value={l.id.toString()}>
-                      Level {l.levelNumber} - {l.name}
+                      Niveau {l.levelNumber} - {l.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Session</label>
+              <label className="text-sm font-medium text-muted-foreground">Seance</label>
               <Select
                 value={selectedSession}
                 onValueChange={handleSessionChange}
                 disabled={!currentLevel}
               >
                 <SelectTrigger data-testid="select-session">
-                  <SelectValue placeholder="Select session" />
+                  <SelectValue placeholder="Choisir une seance" />
                 </SelectTrigger>
                 <SelectContent>
                   {currentLevel?.sessions.map((s) => (
                     <SelectItem key={s.id} value={s.id.toString()}>
-                      Session {s.sessionNumber} - {s.title}
+                      Seance {s.sessionNumber} - {s.title}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -200,10 +200,10 @@ export default function AttendancePage() {
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle className="text-base flex items-center gap-2">
               <ClipboardCheck className="h-4 w-4" />
-              Attendance Sheet
+              Feuille de presence
               {currentSession && (
                 <Badge variant="secondary" className="text-xs ml-1">
-                  Session {currentSession.sessionNumber}
+                  Seance {currentSession.sessionNumber}
                 </Badge>
               )}
             </CardTitle>
@@ -213,7 +213,7 @@ export default function AttendancePage() {
               data-testid="button-save-attendance"
             >
               <Save className="h-4 w-4 mr-2" />
-              {saveMutation.isPending ? "Saving..." : "Save"}
+              {saveMutation.isPending ? "Enregistrement..." : "Enregistrer"}
             </Button>
           </CardHeader>
           <CardContent className="p-0">
@@ -226,17 +226,17 @@ export default function AttendancePage() {
             ) : !attendanceData || attendanceData.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Users className="h-10 w-10 text-muted-foreground mb-3" />
-                <p className="font-medium">No students enrolled</p>
+                <p className="font-medium">Aucun eleve inscrit</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Enroll students in this training first
+                  Inscrivez des eleves a cette formation d'abord
                 </p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[50px]">Status</TableHead>
-                    <TableHead>Student</TableHead>
+                    <TableHead className="w-[50px]">Statut</TableHead>
+                    <TableHead>Eleve</TableHead>
                     <TableHead className="w-[100px] text-center">Present</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -278,9 +278,9 @@ export default function AttendancePage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <ClipboardCheck className="h-10 w-10 text-muted-foreground mb-3" />
-            <p className="font-medium">Select a session to mark attendance</p>
+            <p className="font-medium">Selectionnez une seance pour marquer les presences</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Choose a training, level, and session above
+              Choisissez une formation, un niveau et une seance ci-dessus
             </p>
           </CardContent>
         </Card>

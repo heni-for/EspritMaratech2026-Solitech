@@ -67,10 +67,10 @@ export default function CertificatesPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/certificates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/certificates/eligible"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({ title: "Certificate generated successfully" });
+      toast({ title: "Certificat genere avec succes" });
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to generate certificate", description: error.message, variant: "destructive" });
+      toast({ title: "Erreur lors de la generation", description: error.message, variant: "destructive" });
     },
   });
 
@@ -110,9 +110,9 @@ export default function CertificatesPage() {
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-certificates-title">Certificates</h1>
+        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-certificates-title">Certificats</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Generate and manage training certificates
+          Generer et gerer les certificats de formation
         </p>
       </div>
 
@@ -120,7 +120,7 @@ export default function CertificatesPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
-            Eligible Students
+            Eleves eligibles
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -131,17 +131,17 @@ export default function CertificatesPage() {
           ) : eligible.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Award className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="font-medium">No eligible students</p>
+              <p className="font-medium">Aucun eleve eligible</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Students must complete all 4 levels to be eligible
+                Les eleves doivent completer les 4 niveaux pour etre eligibles
               </p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Training</TableHead>
+                  <TableHead>Eleve</TableHead>
+                  <TableHead>Formation</TableHead>
                   <TableHead className="hidden sm:table-cell">Completion</TableHead>
                   <TableHead className="w-[120px]">Action</TableHead>
                 </TableRow>
@@ -153,14 +153,14 @@ export default function CertificatesPage() {
                     <TableCell className="text-sm text-muted-foreground">{e.trainingName}</TableCell>
                     <TableCell className="hidden sm:table-cell">
                       <Badge variant="default" className="text-xs">
-                        {e.completedLevels}/{e.totalLevels} levels
+                        {e.completedLevels}/{e.totalLevels} niveaux
                       </Badge>
                     </TableCell>
                     <TableCell>
                       {e.alreadyCertified ? (
                         <Badge variant="secondary" className="text-xs">
                           <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Certified
+                          Certifie
                         </Badge>
                       ) : (
                         <Button
@@ -175,7 +175,7 @@ export default function CertificatesPage() {
                           data-testid={`button-generate-cert-${e.studentId}-${e.trainingId}`}
                         >
                           <Award className="h-3.5 w-3.5 mr-1.5" />
-                          Generate
+                          Generer
                         </Button>
                       )}
                     </TableCell>
@@ -191,7 +191,7 @@ export default function CertificatesPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Award className="h-4 w-4" />
-            Issued Certificates
+            Certificats delivres
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -202,20 +202,20 @@ export default function CertificatesPage() {
           ) : issued.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Award className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="font-medium">No certificates issued yet</p>
+              <p className="font-medium">Aucun certificat delivre</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Generate certificates for eligible students above
+                Generez des certificats pour les eleves eligibles ci-dessus
               </p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Certificate #</TableHead>
-                  <TableHead>Student</TableHead>
-                  <TableHead className="hidden sm:table-cell">Training</TableHead>
-                  <TableHead className="hidden md:table-cell">Issued</TableHead>
-                  <TableHead className="w-[80px]">View</TableHead>
+                  <TableHead>N° certificat</TableHead>
+                  <TableHead>Eleve</TableHead>
+                  <TableHead className="hidden sm:table-cell">Formation</TableHead>
+                  <TableHead className="hidden md:table-cell">Date</TableHead>
+                  <TableHead className="w-[80px]">Voir</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -262,10 +262,10 @@ export default function CertificatesPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              Certificate Preview
+              Apercu du certificat
               <Button size="sm" variant="outline" onClick={handlePrint} data-testid="button-print-cert">
                 <Printer className="h-3.5 w-3.5 mr-1.5" />
-                Print
+                Imprimer
               </Button>
             </DialogTitle>
           </DialogHeader>
@@ -302,10 +302,10 @@ export default function CertificatesPage() {
                       fontWeight: "bold",
                     }}
                   >
-                    Certificate of Completion
+                    Certificat de Reussite
                   </h2>
                   <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "24px" }}>
-                    This certifies that
+                    Nous certifions que
                   </p>
                   <p
                     style={{
@@ -319,7 +319,7 @@ export default function CertificatesPage() {
                     {previewData.studentName}
                   </p>
                   <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "20px" }}>
-                    has successfully completed all levels of the training program
+                    a complete avec succes tous les niveaux du programme de formation
                   </p>
                   <p
                     style={{
@@ -342,13 +342,13 @@ export default function CertificatesPage() {
                     }}
                   >
                     <div style={{ textAlign: "left" }}>
-                      <p style={{ fontSize: "11px", color: "#94a3b8" }}>Certificate Number</p>
+                      <p style={{ fontSize: "11px", color: "#94a3b8" }}>Numero de certificat</p>
                       <p style={{ fontSize: "12px", fontFamily: "monospace", fontWeight: "600" }}>
                         {previewData.certificateNumber}
                       </p>
                     </div>
                     <div style={{ textAlign: "right" }}>
-                      <p style={{ fontSize: "11px", color: "#94a3b8" }}>Date Issued</p>
+                      <p style={{ fontSize: "11px", color: "#94a3b8" }}>Date de delivrance</p>
                       <p style={{ fontSize: "12px", fontWeight: "600" }}>
                         {previewData.issuedAt}
                       </p>

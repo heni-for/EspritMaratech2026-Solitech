@@ -71,14 +71,21 @@ export default function StudentDashboard() {
     ? Math.round(formations.reduce((acc, f) => acc + f.progress, 0) / formations.length)
     : 0;
 
+  const getStatusLabel = (status: string) => {
+    if (status === "Certified") return "Certifie";
+    if (status === "Eligible for Certification") return "Eligible au certificat";
+    if (status === "In Progress") return "En cours";
+    return status;
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-student-dashboard-title">
-          My Dashboard
+          Mon tableau de bord
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Welcome, {data?.student.firstName} {data?.student.lastName}
+          Bienvenue, {data?.student.firstName} {data?.student.lastName}
         </p>
       </div>
 
@@ -94,7 +101,7 @@ export default function StudentDashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Overall Progress</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Progression globale</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -103,7 +110,7 @@ export default function StudentDashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Certificates</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Certificats</CardTitle>
             <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -113,12 +120,12 @@ export default function StudentDashboard() {
       </div>
 
       <div>
-        <h2 className="text-lg font-semibold mb-3">My Formations</h2>
+        <h2 className="text-lg font-semibold mb-3">Mes formations</h2>
         {formations.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <BookOpen className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="text-muted-foreground text-sm">No formations yet</p>
+              <p className="text-muted-foreground text-sm">Aucune formation</p>
             </CardContent>
           </Card>
         ) : (
@@ -131,26 +138,26 @@ export default function StudentDashboard() {
                     <Badge
                       variant={f.status === "Certified" ? "default" : f.status === "Eligible for Certification" ? "secondary" : "outline"}
                     >
-                      {f.status}
+                      {getStatusLabel(f.status)}
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="text-muted-foreground">Levels completed</span>
+                    <span className="text-muted-foreground">Niveaux completes</span>
                     <span className="font-medium">{f.levelsCompleted} / {f.totalLevels}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="text-muted-foreground">Sessions attended</span>
+                    <span className="text-muted-foreground">Seances suivies</span>
                     <span className="font-medium">{f.attendedSessions} / {f.totalSessions}</span>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-muted-foreground">Progress</span>
+                    <span className="text-sm text-muted-foreground">Progression</span>
                     <ProgressBar value={f.progress} />
                   </div>
                   {f.certificateNumber && (
                     <div className="text-xs text-muted-foreground pt-1">
-                      Certificate: {f.certificateNumber}
+                      Certificat : {f.certificateNumber}
                     </div>
                   )}
                 </CardContent>
@@ -162,7 +169,7 @@ export default function StudentDashboard() {
 
       {certificates.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold mb-3">My Certificates</h2>
+          <h2 className="text-lg font-semibold mb-3">Mes certificats</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {certificates.map((cert) => (
               <Card key={cert.id}>
@@ -173,7 +180,7 @@ export default function StudentDashboard() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{cert.trainingName}</p>
                     <p className="text-xs text-muted-foreground">{cert.certificateNumber}</p>
-                    <p className="text-xs text-muted-foreground">Issued: {cert.issuedAt}</p>
+                    <p className="text-xs text-muted-foreground">Delivre le : {cert.issuedAt}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -183,12 +190,12 @@ export default function StudentDashboard() {
       )}
 
       <div>
-        <h2 className="text-lg font-semibold mb-3">Attendance History</h2>
+        <h2 className="text-lg font-semibold mb-3">Historique des presences</h2>
         {attendanceHistory.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-8">
               <ClipboardCheck className="h-8 w-8 text-muted-foreground mb-2" />
-              <p className="text-muted-foreground text-sm">No attendance records yet</p>
+              <p className="text-muted-foreground text-sm">Aucun enregistrement de presence</p>
             </CardContent>
           </Card>
         ) : (
@@ -198,10 +205,10 @@ export default function StudentDashboard() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left p-3 font-medium text-muted-foreground">Training</th>
-                      <th className="text-left p-3 font-medium text-muted-foreground">Level</th>
-                      <th className="text-left p-3 font-medium text-muted-foreground">Session</th>
-                      <th className="text-center p-3 font-medium text-muted-foreground">Status</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Formation</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Niveau</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Seance</th>
+                      <th className="text-center p-3 font-medium text-muted-foreground">Statut</th>
                     </tr>
                   </thead>
                   <tbody>

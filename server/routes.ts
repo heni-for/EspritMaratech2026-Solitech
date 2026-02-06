@@ -384,7 +384,8 @@ export async function registerRoutes(
   });
 
   app.post("/api/trainings", requireRole("admin"), async (req, res) => {
-    const parsed = insertTrainingSchema.safeParse(req.body);
+    const { trainerIds, ...trainingData } = req.body;
+    const parsed = insertTrainingSchema.safeParse(trainingData);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
 
     const training = await storage.createTraining(parsed.data);
@@ -393,15 +394,23 @@ export async function registerRoutes(
       const level = await storage.createLevel({
         trainingId: training.id,
         levelNumber: i,
-        name: `Level ${i}`,
+        name: `Niveau ${i}`,
       });
       for (let j = 1; j <= 6; j++) {
         await storage.createSession({
           levelId: level.id,
           sessionNumber: j,
-          title: `Session ${j}`,
+          title: `Seance ${j}`,
           date: null,
         });
+      }
+    }
+
+    if (Array.isArray(trainerIds)) {
+      for (const userId of trainerIds) {
+        if (typeof userId === "number") {
+          await storage.createTrainerAssignment({ userId, trainingId: training.id });
+        }
       }
     }
 

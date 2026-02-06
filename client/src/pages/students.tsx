@@ -62,10 +62,10 @@ export default function StudentsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       setDialogOpen(false);
       form.reset();
-      toast({ title: "Student added successfully" });
+      toast({ title: "Eleve ajoute avec succes" });
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to add student", description: error.message, variant: "destructive" });
+      toast({ title: "Erreur lors de l'ajout", description: error.message, variant: "destructive" });
     },
   });
 
@@ -80,21 +80,21 @@ export default function StudentsPage() {
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-students-title">Students</h1>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-students-title">Eleves</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Manage student records and enrollment
+            Gerer les fiches eleves et les inscriptions
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-student">
               <Plus className="h-4 w-4 mr-2" />
-              Add Student
+              Ajouter un eleve
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Add New Student</DialogTitle>
+              <DialogTitle>Nouvel eleve</DialogTitle>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
@@ -104,9 +104,9 @@ export default function StudentsPage() {
                     name="firstName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>First Name</FormLabel>
+                        <FormLabel>Prenom</FormLabel>
                         <FormControl>
-                          <Input placeholder="First name" {...field} data-testid="input-first-name" />
+                          <Input placeholder="Prenom" {...field} data-testid="input-first-name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -117,9 +117,9 @@ export default function StudentsPage() {
                     name="lastName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Last Name</FormLabel>
+                        <FormLabel>Nom</FormLabel>
                         <FormControl>
-                          <Input placeholder="Last name" {...field} data-testid="input-last-name" />
+                          <Input placeholder="Nom" {...field} data-testid="input-last-name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -144,7 +144,7 @@ export default function StudentsPage() {
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone</FormLabel>
+                      <FormLabel>Telephone</FormLabel>
                       <FormControl>
                         <Input placeholder="+216 XX XXX XXX" {...field} value={field.value ?? ""} data-testid="input-phone" />
                       </FormControl>
@@ -157,7 +157,7 @@ export default function StudentsPage() {
                   name="dateOfBirth"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Date of Birth</FormLabel>
+                      <FormLabel>Date de naissance</FormLabel>
                       <FormControl>
                         <Input type="date" {...field} value={field.value ?? ""} data-testid="input-dob" />
                       </FormControl>
@@ -171,9 +171,9 @@ export default function StudentsPage() {
                     name="guardianName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Guardian Name</FormLabel>
+                        <FormLabel>Nom du tuteur</FormLabel>
                         <FormControl>
-                          <Input placeholder="Guardian" {...field} value={field.value ?? ""} data-testid="input-guardian-name" />
+                          <Input placeholder="Tuteur" {...field} value={field.value ?? ""} data-testid="input-guardian-name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -184,9 +184,9 @@ export default function StudentsPage() {
                     name="guardianPhone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Guardian Phone</FormLabel>
+                        <FormLabel>Tel. du tuteur</FormLabel>
                         <FormControl>
-                          <Input placeholder="Phone" {...field} value={field.value ?? ""} data-testid="input-guardian-phone" />
+                          <Input placeholder="Telephone" {...field} value={field.value ?? ""} data-testid="input-guardian-phone" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -194,7 +194,7 @@ export default function StudentsPage() {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-student">
-                  {createMutation.isPending ? "Adding..." : "Add Student"}
+                  {createMutation.isPending ? "Ajout..." : "Ajouter l'eleve"}
                 </Button>
               </form>
             </Form>
@@ -205,7 +205,7 @@ export default function StudentsPage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search students..."
+          placeholder="Rechercher un eleve..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
@@ -224,19 +224,19 @@ export default function StudentsPage() {
           ) : filteredStudents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Users className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="text-sm font-medium">No students found</p>
+              <p className="text-sm font-medium">Aucun eleve trouve</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {search ? "Try adjusting your search" : "Add a student to get started"}
+                {search ? "Essayez de modifier votre recherche" : "Ajoutez un eleve pour commencer"}
               </p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Nom</TableHead>
                   <TableHead className="hidden sm:table-cell">Email</TableHead>
-                  <TableHead className="hidden md:table-cell">Phone</TableHead>
-                  <TableHead className="hidden lg:table-cell">Guardian</TableHead>
+                  <TableHead className="hidden md:table-cell">Telephone</TableHead>
+                  <TableHead className="hidden lg:table-cell">Tuteur</TableHead>
                   <TableHead className="w-[80px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>

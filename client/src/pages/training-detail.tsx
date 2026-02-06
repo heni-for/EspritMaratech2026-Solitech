@@ -52,10 +52,10 @@ export default function TrainingDetailPage() {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[50vh]">
         <BookOpen className="h-10 w-10 text-muted-foreground mb-3" />
-        <p className="font-medium">Training not found</p>
+        <p className="font-medium">Formation introuvable</p>
         <Link href="/trainings">
           <Button variant="outline" className="mt-4" data-testid="button-back-trainings">
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back to Trainings
+            <ArrowLeft className="h-4 w-4 mr-2" /> Retour aux formations
           </Button>
         </Link>
       </div>
@@ -95,7 +95,7 @@ export default function TrainingDetailPage() {
             </div>
             <div>
               <p className="text-2xl font-bold">{enrolledStudents.length}</p>
-              <p className="text-xs text-muted-foreground">Enrolled Students</p>
+              <p className="text-xs text-muted-foreground">Eleves inscrits</p>
             </div>
           </CardContent>
         </Card>
@@ -106,7 +106,7 @@ export default function TrainingDetailPage() {
             </div>
             <div>
               <p className="text-2xl font-bold">{levels.length}</p>
-              <p className="text-xs text-muted-foreground">Levels</p>
+              <p className="text-xs text-muted-foreground">Niveaux</p>
             </div>
           </CardContent>
         </Card>
@@ -119,7 +119,7 @@ export default function TrainingDetailPage() {
               <p className="text-2xl font-bold">
                 {enrolledStudents.filter((s) => s.eligible).length}
               </p>
-              <p className="text-xs text-muted-foreground">Eligible for Certificate</p>
+              <p className="text-xs text-muted-foreground">Eligibles au certificat</p>
             </div>
           </CardContent>
         </Card>
@@ -127,8 +127,8 @@ export default function TrainingDetailPage() {
 
       <Tabs defaultValue="students">
         <TabsList>
-          <TabsTrigger value="students" data-testid="tab-students">Students</TabsTrigger>
-          <TabsTrigger value="levels" data-testid="tab-levels">Levels & Sessions</TabsTrigger>
+          <TabsTrigger value="students" data-testid="tab-students">Eleves</TabsTrigger>
+          <TabsTrigger value="levels" data-testid="tab-levels">Niveaux et seances</TabsTrigger>
         </TabsList>
 
         <TabsContent value="students" className="mt-4">
@@ -137,19 +137,19 @@ export default function TrainingDetailPage() {
               {enrolledStudents.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
                   <Users className="h-10 w-10 text-muted-foreground mb-3" />
-                  <p className="font-medium">No students enrolled</p>
+                  <p className="font-medium">Aucun eleve inscrit</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Enroll students from the trainings list
+                    Inscrivez des eleves depuis la liste des formations
                   </p>
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Progress</TableHead>
-                      <TableHead className="hidden sm:table-cell">Levels</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Eleve</TableHead>
+                      <TableHead>Progression</TableHead>
+                      <TableHead className="hidden sm:table-cell">Niveaux</TableHead>
+                      <TableHead>Statut</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -192,7 +192,7 @@ export default function TrainingDetailPage() {
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="text-xs">
-                                In Progress
+                                En cours
                               </Badge>
                             )}
                           </TableCell>
@@ -211,7 +211,7 @@ export default function TrainingDetailPage() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                 <Layers className="h-10 w-10 text-muted-foreground mb-3" />
-                <p className="font-medium">No levels configured</p>
+                <p className="font-medium">Aucun niveau configure</p>
               </CardContent>
             </Card>
           ) : (
@@ -220,7 +220,7 @@ export default function TrainingDetailPage() {
                 <Card key={level.id}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">Level {level.levelNumber}</Badge>
+                      <Badge variant="secondary" className="text-xs">Niveau {level.levelNumber}</Badge>
                       {level.name}
                     </CardTitle>
                   </CardHeader>
@@ -231,7 +231,7 @@ export default function TrainingDetailPage() {
                           key={session.id}
                           className="p-2 rounded-md border text-center"
                         >
-                          <p className="text-xs font-medium">Session {session.sessionNumber}</p>
+                          <p className="text-xs font-medium">Seance {session.sessionNumber}</p>
                           <p className="text-xs text-muted-foreground mt-0.5 truncate">{session.title}</p>
                           {session.date && (
                             <p className="text-xs text-muted-foreground">{session.date}</p>

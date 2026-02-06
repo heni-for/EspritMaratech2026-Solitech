@@ -54,17 +54,17 @@ export default function TrainerDashboard() {
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-trainer-dashboard-title">
-          Trainer Dashboard
+          Tableau de bord encadrant
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Your assigned trainings and student progress
+          Vos formations assignees et la progression des eleves
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Assigned Trainings</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Formations assignees</CardTitle>
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -73,7 +73,7 @@ export default function TrainerDashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Students</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total eleves</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -82,7 +82,7 @@ export default function TrainerDashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Attendance</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Presence moyenne</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -96,12 +96,12 @@ export default function TrainerDashboard() {
       </div>
 
       <div>
-        <h2 className="text-lg font-semibold mb-3">Your Trainings</h2>
+        <h2 className="text-lg font-semibold mb-3">Vos formations</h2>
         {trainings.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <BookOpen className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="text-muted-foreground text-sm">No trainings assigned yet</p>
+              <p className="text-muted-foreground text-sm">Aucune formation assignee</p>
             </CardContent>
           </Card>
         ) : (
@@ -112,7 +112,7 @@ export default function TrainerDashboard() {
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <CardTitle className="text-base">{t.training.name}</CardTitle>
                     <Badge variant={t.training.status === "active" ? "default" : "secondary"}>
-                      {t.training.status}
+                      {t.training.status === "active" ? "Actif" : t.training.status}
                     </Badge>
                   </div>
                   {t.training.description && (
@@ -121,25 +121,25 @@ export default function TrainerDashboard() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="text-muted-foreground">Students enrolled</span>
+                    <span className="text-muted-foreground">Eleves inscrits</span>
                     <span className="font-medium">{t.enrolledCount}</span>
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-muted-foreground">Attendance rate</span>
+                      <span className="text-muted-foreground">Taux de presence</span>
                     </div>
                     <ProgressBar value={t.avgAttendance} />
                   </div>
                   <div className="flex gap-2 pt-1">
                     <Button variant="outline" size="sm" asChild>
                       <Link href={`/trainings/${t.training.id}`} data-testid={`link-training-${t.training.id}`}>
-                        View Details
+                        Voir details
                       </Link>
                     </Button>
                     <Button variant="outline" size="sm" asChild>
                       <Link href="/attendance" data-testid={`link-attendance-${t.training.id}`}>
                         <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
-                        Mark Attendance
+                        Marquer presences
                       </Link>
                     </Button>
                   </div>

@@ -28,7 +28,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 
 const adminMenuItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, color: "text-violet-600 dark:text-violet-400" },
+  { title: "Tableau de bord", url: "/", icon: LayoutDashboard, color: "text-violet-600 dark:text-violet-400" },
   { title: "Eleves", url: "/students", icon: Users, color: "text-indigo-600 dark:text-indigo-400" },
   { title: "Formations", url: "/trainings", icon: BookOpen, color: "text-amber-600 dark:text-amber-400" },
   { title: "Presences", url: "/attendance", icon: ClipboardCheck, color: "text-violet-500 dark:text-violet-400" },
@@ -37,7 +37,7 @@ const adminMenuItems = [
 ];
 
 const trainerMenuItems = [
-  { title: "Dashboard", url: "/trainer", icon: LayoutDashboard, color: "text-violet-600 dark:text-violet-400" },
+  { title: "Tableau de bord", url: "/trainer", icon: LayoutDashboard, color: "text-violet-600 dark:text-violet-400" },
   { title: "Formations", url: "/trainings", icon: BookOpen, color: "text-amber-600 dark:text-amber-400" },
   { title: "Presences", url: "/attendance", icon: ClipboardCheck, color: "text-violet-500 dark:text-violet-400" },
   { title: "Eleves", url: "/students", icon: Users, color: "text-indigo-600 dark:text-indigo-400" },
