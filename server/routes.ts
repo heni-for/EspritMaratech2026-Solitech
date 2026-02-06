@@ -155,6 +155,17 @@ export async function registerRoutes(
   });
 
   // ─── Trainer Assignments (Admin only) ───
+  app.get("/api/trainer-assignments", requireRole("admin"), async (_req, res) => {
+    const allAssignments = await storage.getAllTrainerAssignments();
+    const enriched = await Promise.all(
+      allAssignments.map(async (a) => {
+        const training = await storage.getTraining(a.trainingId);
+        return { ...a, trainingName: training?.name || "Unknown" };
+      })
+    );
+    res.json(enriched);
+  });
+
   app.get("/api/trainer-assignments/:userId", requireRole("admin", "trainer"), async (req, res) => {
     const assignments = await storage.getTrainerAssignments(req.params.userId);
     const enriched = await Promise.all(

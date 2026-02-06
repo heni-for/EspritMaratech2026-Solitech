@@ -57,6 +57,7 @@ export interface IStorage {
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<void>;
 
+  getAllTrainerAssignments(): Promise<TrainerAssignment[]>;
   getTrainerAssignments(userId: string): Promise<TrainerAssignment[]>;
   getTrainerAssignmentsByTraining(trainingId: number): Promise<TrainerAssignment[]>;
   createTrainerAssignment(data: InsertTrainerAssignment): Promise<TrainerAssignment>;
@@ -252,6 +253,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: string): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  async getAllTrainerAssignments(): Promise<TrainerAssignment[]> {
+    return db.select().from(trainerAssignments);
   }
 
   async getTrainerAssignments(userId: string): Promise<TrainerAssignment[]> {
