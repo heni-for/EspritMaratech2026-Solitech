@@ -66,8 +66,8 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         <Link href={user?.role === "admin" ? "/" : user?.role === "trainer" ? "/trainer" : "/my"}>
           <div className="flex items-center gap-2 cursor-pointer">
-            <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary">
-              <GraduationCap className="h-5 w-5 text-primary-foreground" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-md bg-sidebar-primary">
+              <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-bold leading-none">ASTBA</span>
