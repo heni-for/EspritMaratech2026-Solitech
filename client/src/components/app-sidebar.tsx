@@ -72,7 +72,7 @@ export function AppSidebar() {
           </Tooltip>
         </Link>
       </SidebarHeader>
-      <SidebarContent className="flex flex-col items-center">
+      <SidebarContent className="flex flex-col items-center justify-center">
         <SidebarGroup className="px-0">
           <SidebarGroupContent>
             <SidebarMenu>
