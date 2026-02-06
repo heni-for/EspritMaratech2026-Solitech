@@ -93,12 +93,27 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  fullName: text("full_name").notNull(),
+  role: text("role").notNull().default("student"),
+  studentId: integer("student_id"),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+  fullName: true,
+  role: true,
+  studentId: true,
 });
-
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export const trainerAssignments = pgTable("trainer_assignments", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: varchar("user_id").notNull(),
+  trainingId: integer("training_id").notNull(),
+});
+
+export const insertTrainerAssignmentSchema = createInsertSchema(trainerAssignments).omit({ id: true });
+export type InsertTrainerAssignment = z.infer<typeof insertTrainerAssignmentSchema>;
+export type TrainerAssignment = typeof trainerAssignments.$inferSelect;

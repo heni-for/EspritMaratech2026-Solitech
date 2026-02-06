@@ -1,0 +1,214 @@
+estion des utilisateurs & types d’accès
+
+L’application ASTBA repose sur un système de rôles avec trois types d’accès :
+
+ADMINISTRATION
+
+TRAINER / Encadrant
+
+STUDENT (Élève)
+
+Chaque rôle dispose :
+
+d’un dashboard dédié
+
+de fonctionnalités spécifiques
+
+de droits bien définis
+
+1️⃣ Dashboard ADMINISTRATION
+🎯 Objectif
+
+Permettre à l’administration de gérer l’ensemble du système : élèves, formations, encadrants, suivi global et certification.
+
+👤 Qui l’utilise ?
+
+Responsables de l’association
+
+Membres administratifs
+
+📊 Contenu du dashboard
+
+Vue globale (statistiques) :
+
+Nombre total d’élèves
+
+Formations actives
+
+Taux de présence global
+
+Élèves éligibles à la certification
+
+Activité récente :
+
+Dernières inscriptions
+
+Dernières séances marquées
+
+Certificats générés récemment
+
+⚙️ Fonctionnalités
+
+Gestion des élèves (CRUD)
+
+Gestion des formations
+
+Création d’une formation
+
+Génération automatique de 4 niveaux × 6 séances
+
+Gestion des encadrants
+
+Consultation des présences (lecture globale)
+
+Validation et génération des certificats
+
+Accès aux paramètres d’accessibilité
+
+Gestion des utilisateurs et des rôles
+
+🔒 Droits
+
+Accès total à toutes les données
+
+Peut modifier, supprimer, valider
+
+2️⃣ Dashboard TRAINER / Encadrant
+🎯 Objectif
+
+Permettre à l’encadrant de suivre les formations qu’il anime et de gérer les présences.
+
+👤 Qui l’utilise ?
+
+Formateurs
+
+Encadrants pédagogiques
+
+📊 Contenu du dashboard
+
+Formations assignées à l’encadrant
+
+Prochaines séances planifiées
+
+Statistiques rapides :
+
+Présents / absents par séance
+
+Séances manquées
+
+Liste des élèves par formation
+
+⚙️ Fonctionnalités
+
+Consultation des formations assignées
+
+Marquage des présences :
+
+Par formation → niveau → séance
+
+Visualisation claire :
+
+Élèves présents
+
+Élèves absents
+
+Séances non marquées
+
+Suivi de l’avancement des élèves
+
+Signalement des élèves en difficulté
+
+Lecture des informations élèves (sans modification)
+
+🔒 Droits
+
+❌ Ne peut pas créer de formations
+
+❌ Ne peut pas générer de certificats
+
+✅ Peut marquer les présences
+
+✅ Peut consulter les progressions
+
+3️⃣ Dashboard STUDENT (Élève)
+🎯 Objectif
+
+Permettre à l’élève de suivre son propre parcours de manière simple, claire et motivante.
+
+👤 Qui l’utilise ?
+
+Élèves inscrits aux formations
+
+📊 Contenu du dashboard
+
+Formation(s) suivie(s)
+
+Niveau actuel
+
+Progression globale (%)
+
+Historique des séances :
+
+Présent
+
+Absent
+
+Non marqué
+
+Statut :
+
+En cours
+
+Éligible à la certification
+
+Formation terminée
+
+⚙️ Fonctionnalités
+
+Consultation de son profil
+
+Consultation de ses formations
+
+Suivi de son avancement :
+
+Niveaux validés
+
+Séances restantes
+
+Téléchargement du certificat (si éligible)
+
+Accès aux options d’accessibilité :
+
+Taille texte
+
+Contraste élevé
+
+Lecture vocale (TTS)
+
+Mode simple
+
+🔒 Droits
+
+❌ Ne peut rien modifier
+
+❌ Ne voit que ses propres données
+
+✅ Accès en lecture uniquement
+
+🧠 Logique de redirection (après login)
+
+Après authentification :
+
+Si role = ADMIN → Dashboard Administration
+
+Si role = TRAINER → Dashboard Trainer
+
+Si role = STUDENT → Dashboard Student
+
+👉 Un seul compte = un seul dashboard
+
+📌 Résumé (table simple)
+Rôle	Dashboard	Objectif principal
+ADMINISTRATION	Dashboard global	Gestion complète du système
+TRAINER	Dashboard pédagogique	Présences & suivi des élèves
+STUDENT	Dashboard personnel	Suivi du parcours
