@@ -1,7 +1,23 @@
 import { storage } from "./storage";
+import bcrypt from "bcrypt";
 
 export async function seedDatabase() {
+  const existingUsers = await storage.getUsers();
   const existingStudents = await storage.getStudents();
+
+  if (existingUsers.length === 0) {
+    console.log("Creating default admin user...");
+    const hashedPassword = await bcrypt.hash("admin123", 10);
+    await storage.createUser({
+      username: "admin",
+      password: hashedPassword,
+      fullName: "Administrator",
+      role: "admin",
+      studentId: null,
+    });
+    console.log("Default admin created (username: admin, password: admin123)");
+  }
+
   if (existingStudents.length > 0) return;
 
   console.log("Seeding database...");
@@ -58,5 +74,26 @@ export async function seedDatabase() {
     }
   }
 
+  const hashedTrainerPw = await bcrypt.hash("trainer123", 10);
+  const trainerUser = await storage.createUser({
+    username: "trainer1",
+    password: hashedTrainerPw,
+    fullName: "Mohamed Encadrant",
+    role: "trainer",
+    studentId: null,
+  });
+  await storage.createTrainerAssignment({ userId: trainerUser.id, trainingId: training1.id });
+  await storage.createTrainerAssignment({ userId: trainerUser.id, trainingId: training2.id });
+
+  const hashedStudentPw = await bcrypt.hash("student123", 10);
+  await storage.createUser({
+    username: "ahmed",
+    password: hashedStudentPw,
+    fullName: "Ahmed Ben Ali",
+    role: "student",
+    studentId: students[0].id,
+  });
+
   console.log("Database seeded successfully!");
+  console.log("Demo accounts: admin/admin123, trainer1/trainer123, ahmed/student123");
 }
