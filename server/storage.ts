@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import {
-  students, trainings, levels, sessions, enrollments, attendance, certificates,
+  students, trainings, levels, sessions, enrollments, attendance, certificates, users, trainerAssignments,
   type Student, type InsertStudent,
   type Training, type InsertTraining,
   type Level, type InsertLevel,
@@ -9,6 +9,8 @@ import {
   type Enrollment, type InsertEnrollment,
   type Attendance, type InsertAttendance,
   type Certificate, type InsertCertificate,
+  type User, type InsertUser,
+  type TrainerAssignment, type InsertTrainerAssignment,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -38,12 +40,25 @@ export interface IStorage {
 
   getCertificates(): Promise<Certificate[]>;
   getCertificate(studentId: number, trainingId: number): Promise<Certificate | undefined>;
+  getCertificatesByStudent(studentId: number): Promise<Certificate[]>;
   createCertificate(data: InsertCertificate): Promise<Certificate>;
 
   getStudentCount(): Promise<number>;
   getActiveTrainingCount(): Promise<number>;
   getCertificateCount(): Promise<number>;
   getTodayAttendanceCount(): Promise<number>;
+
+  getUsers(): Promise<User[]>;
+  getUser(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(data: InsertUser): Promise<User>;
+  updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<void>;
+
+  getTrainerAssignments(userId: string): Promise<TrainerAssignment[]>;
+  getTrainerAssignmentsByTraining(trainingId: number): Promise<TrainerAssignment[]>;
+  createTrainerAssignment(data: InsertTrainerAssignment): Promise<TrainerAssignment>;
+  deleteTrainerAssignment(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -158,6 +173,10 @@ export class DatabaseStorage implements IStorage {
     return cert;
   }
 
+  async getCertificatesByStudent(studentId: number): Promise<Certificate[]> {
+    return db.select().from(certificates).where(eq(certificates.studentId, studentId));
+  }
+
   async createCertificate(data: InsertCertificate): Promise<Certificate> {
     const [cert] = await db.insert(certificates).values(data).returning();
     return cert;
@@ -188,6 +207,51 @@ export class DatabaseStorage implements IStorage {
       .from(attendance)
       .where(and(eq(attendance.present, true), sql`${attendance.markedAt} LIKE ${today + '%'}`));
     return result[0]?.count ?? 0;
+  }
+
+  async getUsers(): Promise<User[]> {
+    return db.select().from(users);
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async createUser(data: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(data).returning();
+    return user;
+  }
+
+  async updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined> {
+    const [user] = await db.update(users).set(data).where(eq(users.id, id)).returning();
+    return user;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  async getTrainerAssignments(userId: string): Promise<TrainerAssignment[]> {
+    return db.select().from(trainerAssignments).where(eq(trainerAssignments.userId, userId));
+  }
+
+  async getTrainerAssignmentsByTraining(trainingId: number): Promise<TrainerAssignment[]> {
+    return db.select().from(trainerAssignments).where(eq(trainerAssignments.trainingId, trainingId));
+  }
+
+  async createTrainerAssignment(data: InsertTrainerAssignment): Promise<TrainerAssignment> {
+    const [assignment] = await db.insert(trainerAssignments).values(data).returning();
+    return assignment;
+  }
+
+  async deleteTrainerAssignment(id: number): Promise<void> {
+    await db.delete(trainerAssignments).where(eq(trainerAssignments.id, id));
   }
 }
 
