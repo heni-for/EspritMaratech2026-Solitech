@@ -52,14 +52,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-sidebar">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
-          <div className="flex items-center justify-center w-14 h-14 rounded-md mb-3 bg-sidebar-primary">
-            <GraduationCap className="h-8 w-8 text-sidebar-primary-foreground" />
+          <div className="flex items-center justify-center w-14 h-14 rounded-md mb-3 bg-primary">
+            <GraduationCap className="h-8 w-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-sidebar-foreground" data-testid="text-login-title">ASTBA</h1>
-          <p className="text-sm text-sidebar-foreground/60" data-testid="text-login-subtitle">Suivi de formation et presences</p>
+          <h1 className="text-2xl font-bold" data-testid="text-login-title">ASTBA</h1>
+          <p className="text-sm text-muted-foreground" data-testid="text-login-subtitle">Suivi de formation et presences</p>
         </div>
 
         <Card>
