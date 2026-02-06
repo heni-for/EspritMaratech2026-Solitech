@@ -97,6 +97,7 @@ const managementLinks = [
 export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activePeriod, setActivePeriod] = useState("1s");
+  const [activeFormation, setActiveFormation] = useState(0);
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
   });
@@ -277,8 +278,8 @@ export default function Dashboard() {
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <div>
-              <CardTitle className="text-base font-semibold">Resume des formations</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">Progression moyenne</p>
+              <CardTitle className="text-base font-semibold">Vos formations</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Apercu et progression</p>
             </div>
             <Link href="/trainings">
               <Button variant="ghost" size="icon" data-testid="button-view-trainings">
@@ -288,51 +289,92 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="pt-0">
             {isLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-2 w-full rounded-full" />
-                  </div>
-                ))}
+              <div className="flex justify-center py-8">
+                <Skeleton className="h-40 w-64 rounded-xl" />
               </div>
             ) : stats?.trainingProgress && stats.trainingProgress.length > 0 ? (
-              <div className="space-y-4">
-                {stats.trainingProgress.map((tp, idx) => {
-                  const colors = [
-                    "bg-violet-500",
-                    "bg-orange-500",
-                    "bg-teal-500",
-                    "bg-blue-500",
-                    "bg-rose-500",
-                  ];
-                  const trackColors = [
-                    "bg-violet-500/15",
-                    "bg-orange-500/15",
-                    "bg-teal-500/15",
-                    "bg-blue-500/15",
-                    "bg-rose-500/15",
-                  ];
-                  return (
-                    <div key={tp.trainingId} className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium truncate">{tp.trainingName}</span>
-                        <span className="text-sm font-semibold">{tp.avgProgress}%</span>
-                      </div>
-                      <div className={`h-2 rounded-full ${trackColors[idx % trackColors.length]} overflow-hidden`}>
+              <>
+                <div className="relative flex items-center justify-center py-4" style={{ minHeight: "200px" }}>
+                  {stats.trainingProgress.slice(0, 4).map((tp, idx, arr) => {
+                    const gradients = [
+                      "linear-gradient(135deg, hsl(248, 55%, 55%) 0%, hsl(248, 45%, 40%) 100%)",
+                      "linear-gradient(135deg, hsl(18, 90%, 58%) 0%, hsl(18, 80%, 45%) 100%)",
+                      "linear-gradient(135deg, hsl(174, 55%, 45%) 0%, hsl(174, 50%, 33%) 100%)",
+                      "linear-gradient(135deg, hsl(210, 65%, 50%) 0%, hsl(210, 55%, 38%) 100%)",
+                    ];
+                    const isActive = idx === activeFormation;
+                    const offset = (idx - activeFormation) * 28;
+                    const scale = isActive ? 1 : 0.92 - Math.abs(idx - activeFormation) * 0.03;
+                    const zIndex = isActive ? 30 : 20 - Math.abs(idx - activeFormation);
+                    const opacity = isActive ? 1 : 0.7 - Math.abs(idx - activeFormation) * 0.15;
+
+                    return (
+                      <div
+                        key={tp.trainingId}
+                        className="absolute cursor-pointer"
+                        style={{
+                          zIndex,
+                          transform: `translateX(${offset}px) scale(${scale})`,
+                          opacity,
+                          transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                          width: "240px",
+                        }}
+                        onClick={() => setActiveFormation(idx)}
+                        data-testid={`formation-card-${tp.trainingId}`}
+                      >
                         <div
-                          className={`h-full rounded-full ${colors[idx % colors.length]} transition-all duration-500`}
-                          style={{ width: `${tp.avgProgress}%` }}
-                        />
+                          className="rounded-xl p-5 text-white shadow-lg"
+                          style={{
+                            background: gradients[idx % gradients.length],
+                            minHeight: "150px",
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-6">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-md bg-white/20 flex items-center justify-center">
+                                <BookOpen className="h-4 w-4 text-white" />
+                              </div>
+                              <div className="w-5 h-5 rounded-full bg-white/30" />
+                            </div>
+                            <span className="text-xs font-medium bg-white/20 px-2 py-0.5 rounded-full">
+                              {tp.avgProgress}%
+                            </span>
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] tracking-widest uppercase text-white/60">Formation</p>
+                            <p className="text-sm font-bold truncate">{tp.trainingName}</p>
+                          </div>
+                          <div className="flex items-center justify-between mt-4">
+                            <span className="text-xs text-white/70">{tp.enrolledCount} inscrits</span>
+                            <span className="text-xs font-semibold text-white/90">{tp.completedCount} termines</span>
+                          </div>
+                          <div className="mt-2 h-1.5 rounded-full bg-white/20 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-white/80 transition-all duration-500"
+                              style={{ width: `${tp.avgProgress}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-xs text-muted-foreground">{tp.enrolledCount} inscrits</span>
-                        <span className="text-xs text-muted-foreground">{tp.completedCount} termines</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-center gap-1.5 mt-2">
+                  {stats.trainingProgress.slice(0, 4).map((_, idx) => (
+                    <button
+                      key={idx}
+                      className={`rounded-full transition-all duration-300 ${
+                        idx === activeFormation
+                          ? "w-5 h-1.5 bg-primary"
+                          : "w-1.5 h-1.5 bg-muted-foreground/30"
+                      }`}
+                      onClick={() => setActiveFormation(idx)}
+                      data-testid={`dot-formation-${idx}`}
+                    />
+                  ))}
+                </div>
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <BookOpen className="h-8 w-8 text-muted-foreground mb-2" />

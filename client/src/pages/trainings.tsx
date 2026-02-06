@@ -195,15 +195,14 @@ export default function TrainingsPage() {
                   ) : (
                     <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2">
                       {trainers.map((trainer) => (
-                        <div
+                        <label
                           key={trainer.id}
                           className="flex items-center gap-3 p-2 rounded-md hover-elevate cursor-pointer"
-                          onClick={() => toggleTrainer(trainer.id)}
                           data-testid={`checkbox-trainer-${trainer.id}`}
                         >
                           <Checkbox
                             checked={selectedTrainers.includes(trainer.id)}
-                            onCheckedChange={() => {}}
+                            onCheckedChange={() => toggleTrainer(trainer.id)}
                           />
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-semibold flex-shrink-0">
@@ -214,7 +213,7 @@ export default function TrainingsPage() {
                               <p className="text-xs text-muted-foreground truncate">@{trainer.username}</p>
                             </div>
                           </div>
-                        </div>
+                        </label>
                       ))}
                     </div>
                   )}
