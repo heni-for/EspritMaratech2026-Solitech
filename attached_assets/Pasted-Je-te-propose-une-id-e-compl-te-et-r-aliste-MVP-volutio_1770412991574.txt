@@ -1,0 +1,244 @@
+Je te propose une idée complète et réaliste (MVP + évolutions) + références normes.
+
+1) Cadre normes & “lois / orientation” en Tunisie
+Références tunisiennes (à citer dans ton rapport)
+
+Loi tunisienne n°2005-83 (15 août 2005) : loi d’orientation relative à la promotion et la protection des personnes handicapées (base juridique “non-discrimination / accessibilité”).
+
+Orientation e-gov / sites publics : initiative de la Présidence du Gouvernement sur l’accessibilité des services / sites web publics (utile pour justifier l’obligation morale et administrative).
+
+Normes internationales à viser (standard de référence)
+
+WCAG 2.2 (principes : Perceptible, Utilisable/Operable, Compréhensible, Robuste) — standard W3C.
+✅ Pour un projet “sérieux”, vise WCAG 2.2 niveau AA (c’est la cible la plus utilisée dans le monde public).
+
+2) Vision produit : “Accessible by default” + Assistant IA
+Objectif
+
+Créer une application de gestion des formations inclusive, utilisable :
+
+clavier / souris / tactile
+
+avec lecteur d’écran
+
+en mode contraste élevé
+
+avec voix (TTS/STT)
+
+avec aide cognitive (interface simple + assistant)
+
+3) Exigences accessibilité (selon tes points WCAG)
+A) Perceptible (👁️ visuel, auditif)
+
+✅ À implémenter :
+
+Thème contraste élevé (toggle)
+
+Taille texte ajustable (A-, A, A+)
+
+Ne jamais transmettre une info seulement par couleur
+Exemple : “Absent” = badge texte + icône + couleur
+
+Alt text pour icônes/images, labels pour champs
+
+Sous-titres / transcription si tu ajoutes une vidéo
+
+Pas de clignotement (anti-épilepsie)
+
+B) Operable / Utilisable (♿ moteur)
+
+✅ À implémenter :
+
+Navigation 100% clavier (Tab/Shift+Tab/Enter/Escape)
+
+Focus visible (anneau, surbrillance)
+
+Boutons grands, zones cliquables larges (44px min)
+
+Pas de drag&drop obligatoire
+
+Raccourcis utiles (ex: Alt+P Présence, Alt+E Élèves…)
+
+C) Compréhensible (🧠 cognitif)
+
+✅ À implémenter :
+
+Interface “mode simple” (moins d’options à l’écran)
+
+Étapes claires (wizard) : Créer formation → Inscrire → Présence → Certif
+
+Messages d’erreur simples + solutions (“Numéro incorrect, مثال: 22xxxxxx”)
+
+Icônes + texte (pas d’icônes seules)
+
+D) Robuste (compatibilité)
+
+✅ À implémenter :
+
+HTML sémantique + ARIA correctement (pas “ARIA partout”, seulement utile)
+
+Compatible lecteurs d’écran (NVDA/JAWS/VoiceOver)
+
+Tests Lighthouse + axe-core
+
+Pas de composants “cassés” au zoom 200%
+
+4) “AI Helper” (Assistant psychologique + support)
+
+Tu peux le présenter comme Assistant d’accessibilité et d’accompagnement :
+
+Fonctions concrètes (très utiles, réalistes)
+
+Guide pas-à-pas (pour formateur) : “Que faire maintenant ?”
+
+Explication simplifiée : “C’est quoi un niveau ?”
+
+Lecture vocale (TTS) : lire pages, notifications, résumé élève
+
+Commande vocale (STT) : “Marquer Ahmed présent”, “Ouvrir certificats”
+
+Mode stress/cognitif : UI réduit + confirmations + prévention erreurs
+
+Aide à la saisie : correction téléphone, nom, CIN, etc.
+
+Tu n’as pas besoin de “psychologie clinique”, mais un design rassurant : ton neutre, erreurs non-culpabilisantes, étapes guidées.
+
+5) Langue des signes (solution réaliste)
+Option MVP (recommandée pour hackathon / PFE)
+
+Ajouter un bouton “Langue des signes” sur les pages critiques :
+
+Connexion
+
+Marquer présence
+
+Générer certificat
+
+Afficher une vidéo courte (ou overlay) en langue des signes tunisienne expliquant l’action.
+
+✅ Avantage : faisable vite, impact énorme.
+
+Option avancée (R&D)
+
+Avatar de langue des signes (synthèse) = complexe, coûteux, pas fiable.
+
+Tu peux le proposer comme évolution.
+
+6) Stack technique (ton choix) + comment l’appliquer
+Frontend (React + Vite + Tailwind + shadcn/ui)
+
+Thèmes : Tailwind + CSS variables + toggle “High Contrast”
+
+Taille texte : classes Tailwind dynamiques + stockage préférence (localStorage)
+
+Composants shadcn + Radix = bon clavier par défaut
+
+i18n FR/AR (RTL) : dir="rtl" pour arabe + libs i18n (react-i18next)
+
+Backend (Node + Express)
+
+API CRUD + logique progression/certification
+
+Endpoint “accessibility settings” optionnel (si tu veux stocker préférences)
+
+DB (Mongo + Mongoose)
+
+Tes collections (students/trainings/levels/sessions/enrollments/attendance/certificates/users…)
+
+Ajout : userPreferences (optionnel) pour :
+
+contrastMode
+
+fontSize
+
+reducedMotion
+
+preferredLanguage
+
+Certificat (Puppeteer HTML→PDF)
+
+Génère PDF
+
+Stocke metadata Mongo
+
+Stockage certificat (MinIO)
+
+Tu voulais “MONIO” → je suppose MinIO (S3 storage) :
+
+PDF upload vers MinIO
+
+DB garde pdfUrl + bucket/key
+
+7) Fonctions “handicap” par type (comme tu as listé)
+👁️ Handicap visuel
+
+Contraste élevé
+
+Taille texte ajustable
+
+Lecteur vocal (TTS)
+
+Navigation clavier
+
+Pas d’info seulement par couleur
+
+♿ Handicap moteur
+
+Gros boutons, spacing
+
+Tout au clavier
+
+Aucun geste compliqué
+
+Support tactile/souris/clavier
+
+🧠 Cognitif
+
+Mode simple
+
+Assistant IA (explications)
+
+Étapes guidées
+
+Messages d’erreur clairs
+
+🔊 Auditif
+
+Tout audio doit être doublé par texte
+
+Vidéo = sous-titres
+
+Langue des signes (vidéos)
+
+🌀 Neurologique
+
+prefers-reduced-motion : réduire animations
+
+Pas de clignotement
+
+UI stable, pas de popups agressifs
+
+8) Ce que tu dois faire maintenant (plan concret)
+Étape 1 — “Accessibilité de base” (obligatoire)
+
+Contraste + taille texte + focus clavier + labels + pas couleur seule
+
+Tests Lighthouse + axe-core
+
+Étape 2 — “Aide IA”
+
+TTS : lecture des textes / résumés
+
+STT : commandes simples (au moins 5 commandes)
+
+Assistant “guide” (FAQ + étapes)
+
+Étape 3 — “Langue des signes”
+
+Vidéos courtes sur pages clés
+
+Bouton accessibilité visible partout
+
+Étape 4 — “Certificat + MinIO”
+
+Puppeteer PDF + upload MinIO + lien de téléchargement + historique
