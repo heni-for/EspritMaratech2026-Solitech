@@ -181,13 +181,21 @@ export async function registerRoutes(
   });
 
   // ─── Students ───
-  app.get("/api/students", requireAuth, async (_req, res) => {
+  app.get("/api/students", requireRole("admin", "trainer"), async (_req, res) => {
     const allStudents = await storage.getStudents();
     res.json(allStudents);
   });
 
   app.get("/api/students/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
+
+    if (req.session.role === "student") {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.studentId !== id) {
+        return res.status(403).json({ message: "You can only view your own profile" });
+      }
+    }
+
     const student = await storage.getStudent(id);
     if (!student) return res.status(404).json({ message: "Student not found" });
 
@@ -464,6 +472,13 @@ export async function registerRoutes(
     const level = flatLevels.find((l) => l.id === session.levelId);
     if (!level) return res.status(404).json({ message: "Level not found" });
 
+    if (req.session.role === "trainer") {
+      const assignments = await storage.getTrainerAssignments(req.session.userId!);
+      if (!assignments.some((a) => a.trainingId === level.trainingId)) {
+        return res.status(403).json({ message: "Not assigned to this training" });
+      }
+    }
+
     const trainingEnrollments = await storage.getEnrollmentsByTraining(level.trainingId);
     const existingAttendance = await storage.getAttendanceBySession(sessionId);
 
@@ -488,6 +503,25 @@ export async function registerRoutes(
     const { records } = req.body;
     if (!Array.isArray(records)) {
       return res.status(400).json({ message: "records array is required" });
+    }
+
+    if (req.session.role === "trainer" && records.length > 0) {
+      const assignments = await storage.getTrainerAssignments(req.session.userId!);
+      const assignedTrainingIds = new Set(assignments.map((a) => a.trainingId));
+
+      const allLevels = await Promise.all(
+        (await storage.getTrainings()).map((t) => storage.getLevelsByTraining(t.id))
+      );
+      const flatLevels = allLevels.flat();
+
+      for (const record of records) {
+        const session = await storage.getSession(record.sessionId);
+        if (!session) continue;
+        const level = flatLevels.find((l) => l.id === session.levelId);
+        if (!level || !assignedTrainingIds.has(level.trainingId)) {
+          return res.status(403).json({ message: "Not assigned to this training" });
+        }
+      }
     }
 
     const now = new Date().toISOString();

@@ -3,7 +3,6 @@ import bcrypt from "bcrypt";
 
 export async function seedDatabase() {
   const existingUsers = await storage.getUsers();
-  const existingStudents = await storage.getStudents();
 
   if (existingUsers.length === 0) {
     console.log("Creating default admin user...");
@@ -18,7 +17,11 @@ export async function seedDatabase() {
     console.log("Default admin created (username: admin, password: admin123)");
   }
 
-  if (existingStudents.length > 0) return;
+  const existingStudents = await storage.getStudents();
+  if (existingStudents.length > 0) {
+    await ensureDemoUsers(existingStudents);
+    return;
+  }
 
   console.log("Seeding database...");
 
@@ -96,4 +99,39 @@ export async function seedDatabase() {
 
   console.log("Database seeded successfully!");
   console.log("Demo accounts: admin/admin123, trainer1/trainer123, ahmed/student123");
+}
+
+async function ensureDemoUsers(existingStudents: { id: number; firstName: string; lastName: string }[]) {
+  const existingTrainer = await storage.getUserByUsername("trainer1");
+  if (!existingTrainer) {
+    console.log("Creating demo trainer user...");
+    const hashedPw = await bcrypt.hash("trainer123", 10);
+    const trainer = await storage.createUser({
+      username: "trainer1",
+      password: hashedPw,
+      fullName: "Mohamed Encadrant",
+      role: "trainer",
+      studentId: null,
+    });
+    const trainings = await storage.getTrainings();
+    for (const t of trainings.slice(0, 2)) {
+      await storage.createTrainerAssignment({ userId: trainer.id, trainingId: t.id });
+    }
+    console.log("Demo trainer created (trainer1/trainer123)");
+  }
+
+  const existingStudent = await storage.getUserByUsername("ahmed");
+  if (!existingStudent) {
+    console.log("Creating demo student user...");
+    const ahmed = existingStudents.find((s) => s.firstName === "Ahmed" && s.lastName === "Ben Ali");
+    const hashedPw = await bcrypt.hash("student123", 10);
+    await storage.createUser({
+      username: "ahmed",
+      password: hashedPw,
+      fullName: "Ahmed Ben Ali",
+      role: "student",
+      studentId: ahmed?.id || null,
+    });
+    console.log("Demo student created (ahmed/student123)");
+  }
 }
