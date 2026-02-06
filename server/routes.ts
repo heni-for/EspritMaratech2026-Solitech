@@ -797,6 +797,13 @@ export async function registerRoutes(
     const todayAttendance = await storage.getTodayAttendanceCount();
 
     const allTrainings = await storage.getTrainings();
+    const allStudents = await storage.getStudents();
+    const allCertificates = await storage.getCertificates();
+
+    let totalPresent = 0;
+    let totalAbsent = 0;
+    let eligibleCount = 0;
+
     const trainingProgress = await Promise.all(
       allTrainings.map(async (t) => {
         const enrolled = await storage.getEnrollmentsByTraining(t.id);
@@ -835,19 +842,134 @@ export async function registerRoutes(
       })
     );
 
+    const attendanceChartData: { label: string; present: number; absent: number }[] = [];
+    const days = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split("T")[0];
+      const dayRecords = await storage.getAttendanceByDate(dateStr);
+      const presentCount = dayRecords.filter((r) => r.present).length;
+      const absentCount = dayRecords.filter((r) => !r.present).length;
+      totalPresent += presentCount;
+      totalAbsent += absentCount;
+      attendanceChartData.push({
+        label: days[d.getDay()],
+        present: presentCount,
+        absent: absentCount,
+      });
+    }
+
+    const attendanceRate = totalPresent + totalAbsent > 0
+      ? Math.round((totalPresent / (totalPresent + totalAbsent)) * 100)
+      : 0;
+
+    const recentAttendance = await storage.getRecentAttendance(10);
+    const recentActivity = await Promise.all(
+      recentAttendance.map(async (record) => {
+        const student = await storage.getStudent(record.studentId);
+        const session = await storage.getSession(record.sessionId);
+        let trainingName = "Inconnu";
+        if (session) {
+          const allLvls = await Promise.all(
+            allTrainings.map((t) => storage.getLevelsByTraining(t.id))
+          );
+          const flatLvls = allLvls.flat();
+          const lvl = flatLvls.find((l) => l.id === session.levelId);
+          if (lvl) {
+            const tr = allTrainings.find((t) => t.id === lvl.trainingId);
+            if (tr) trainingName = tr.name;
+          }
+        }
+        return {
+          id: record.id,
+          studentName: student ? `${student.firstName} ${student.lastName}` : "Inconnu",
+          trainingName,
+          sessionTitle: session?.title || "",
+          present: record.present,
+          markedAt: record.markedAt || "",
+        };
+      })
+    );
+
+    for (const tp of trainingProgress) {
+      eligibleCount += tp.completedCount;
+    }
+    const alreadyCertified = allCertificates.length;
+    const eligibleNotCertified = Math.max(0, eligibleCount - alreadyCertified);
+
+    const alerts: { type: string; message: string; severity: string }[] = [];
+
+    for (const student of allStudents) {
+      const studentAttendance = await storage.getAttendanceByStudent(student.id);
+      const absentRecords = studentAttendance.filter((a) => !a.present);
+      if (absentRecords.length >= 5) {
+        alerts.push({
+          type: "absence",
+          message: `${student.firstName} ${student.lastName} a ${absentRecords.length} absences`,
+          severity: absentRecords.length >= 10 ? "high" : "medium",
+        });
+      }
+    }
+
+    const allEnrollments = await Promise.all(
+      allTrainings.map(async (t) => {
+        const enrolled = await storage.getEnrollmentsByTraining(t.id);
+        return enrolled.map((e) => ({ ...e, trainingName: t.name }));
+      })
+    );
+    const flatEnrollments = allEnrollments.flat();
+
+    for (const enrollment of flatEnrollments) {
+      const trainingLevels = await storage.getLevelsByTraining(enrollment.trainingId);
+      let sessionsAttended = 0;
+      let totalSessions = 0;
+      for (const level of trainingLevels) {
+        const levelSessions = await storage.getSessionsByLevel(level.id);
+        totalSessions += levelSessions.length;
+        for (const session of levelSessions) {
+          const records = await storage.getAttendanceBySession(session.id);
+          if (records.find((a) => a.studentId === enrollment.studentId && a.present)) {
+            sessionsAttended++;
+          }
+        }
+      }
+      const remaining = totalSessions - sessionsAttended;
+      if (remaining > 0 && remaining <= 3 && sessionsAttended > 0) {
+        const student = await storage.getStudent(enrollment.studentId);
+        if (student) {
+          alerts.push({
+            type: "near_completion",
+            message: `${student.firstName} ${student.lastName} - il reste ${remaining} seance(s) pour "${(enrollment as any).trainingName}"`,
+            severity: "info",
+          });
+        }
+      }
+    }
+
     const allUsers = await storage.getUsers();
     const totalUsers = allUsers.length;
     const trainerCount = allUsers.filter((u) => u.role === "trainer").length;
+
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const certificatesThisMonth = allCertificates.filter(
+      (c) => c.issuedAt && c.issuedAt.startsWith(thisMonth)
+    ).length;
 
     res.json({
       totalStudents,
       activeTrainings,
       todayAttendance,
       certificatesIssued,
+      attendanceRate,
+      eligibleCount: eligibleNotCertified,
+      certificatesThisMonth,
       trainingProgress,
+      attendanceChartData,
+      recentActivity,
+      alerts,
       totalUsers,
       trainerCount,
-      recentActivity: [],
     });
   });
 

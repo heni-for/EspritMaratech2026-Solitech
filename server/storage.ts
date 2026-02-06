@@ -47,6 +47,8 @@ export interface IStorage {
   getActiveTrainingCount(): Promise<number>;
   getCertificateCount(): Promise<number>;
   getTodayAttendanceCount(): Promise<number>;
+  getAttendanceByDate(dateStr: string): Promise<Attendance[]>;
+  getRecentAttendance(limit: number): Promise<Attendance[]>;
 
   getUsers(): Promise<User[]>;
   getUser(id: string): Promise<User | undefined>;
@@ -207,6 +209,21 @@ export class DatabaseStorage implements IStorage {
       .from(attendance)
       .where(and(eq(attendance.present, true), sql`${attendance.markedAt} LIKE ${today + '%'}`));
     return result[0]?.count ?? 0;
+  }
+
+  async getAttendanceByDate(dateStr: string): Promise<Attendance[]> {
+    return db
+      .select()
+      .from(attendance)
+      .where(sql`${attendance.markedAt} LIKE ${dateStr + '%'}`);
+  }
+
+  async getRecentAttendance(limit: number): Promise<Attendance[]> {
+    return db
+      .select()
+      .from(attendance)
+      .orderBy(desc(attendance.id))
+      .limit(limit);
   }
 
   async getUsers(): Promise<User[]> {
