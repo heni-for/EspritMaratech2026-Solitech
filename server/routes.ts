@@ -1,20 +1,192 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertStudentSchema, insertTrainingSchema, insertEnrollmentSchema } from "@shared/schema";
+import bcrypt from "bcrypt";
+
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  next();
+}
+
+function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    if (!roles.includes(req.session.role!)) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+    next();
+  };
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
 
-  // ─── Students ───
-  app.get("/api/students", async (_req, res) => {
-    const students = await storage.getStudents();
-    res.json(students);
+  // ─── Auth ───
+  app.post("/api/auth/login", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ message: "Username and password are required" });
+    }
+
+    const user = await storage.getUserByUsername(username);
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    req.session.userId = user.id;
+    req.session.role = user.role;
+
+    res.json({
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role,
+      studentId: user.studentId,
+    });
   });
 
-  app.get("/api/students/:id", async (req, res) => {
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) return res.status(500).json({ message: "Logout failed" });
+      res.clearCookie("connect.sid");
+      res.json({ message: "Logged out" });
+    });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    res.json({
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role,
+      studentId: user.studentId,
+    });
+  });
+
+  // ─── Users (Admin only) ───
+  app.get("/api/users", requireRole("admin"), async (_req, res) => {
+    const allUsers = await storage.getUsers();
+    const safeUsers = allUsers.map((u) => ({
+      id: u.id,
+      username: u.username,
+      fullName: u.fullName,
+      role: u.role,
+      studentId: u.studentId,
+    }));
+    res.json(safeUsers);
+  });
+
+  app.post("/api/users", requireRole("admin"), async (req, res) => {
+    const { username, password, fullName, role, studentId } = req.body;
+    if (!username || !password || !fullName || !role) {
+      return res.status(400).json({ message: "username, password, fullName, and role are required" });
+    }
+    if (!["admin", "trainer", "student"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role. Must be admin, trainer, or student" });
+    }
+
+    const existing = await storage.getUserByUsername(username);
+    if (existing) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await storage.createUser({
+      username,
+      password: hashed,
+      fullName,
+      role,
+      studentId: studentId || null,
+    });
+
+    res.status(201).json({
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role,
+      studentId: user.studentId,
+    });
+  });
+
+  app.patch("/api/users/:id", requireRole("admin"), async (req, res) => {
+    const { fullName, role, studentId, password } = req.body;
+    const updateData: Record<string, any> = {};
+    if (fullName) updateData.fullName = fullName;
+    if (role && ["admin", "trainer", "student"].includes(role)) updateData.role = role;
+    if (studentId !== undefined) updateData.studentId = studentId;
+    if (password) updateData.password = await bcrypt.hash(password, 10);
+
+    const user = await storage.updateUser(req.params.id, updateData);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json({
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role,
+      studentId: user.studentId,
+    });
+  });
+
+  app.delete("/api/users/:id", requireRole("admin"), async (req, res) => {
+    await storage.deleteUser(req.params.id);
+    res.json({ message: "User deleted" });
+  });
+
+  // ─── Trainer Assignments (Admin only) ───
+  app.get("/api/trainer-assignments/:userId", requireRole("admin", "trainer"), async (req, res) => {
+    const assignments = await storage.getTrainerAssignments(req.params.userId);
+    const enriched = await Promise.all(
+      assignments.map(async (a) => {
+        const training = await storage.getTraining(a.trainingId);
+        return { ...a, trainingName: training?.name || "Unknown" };
+      })
+    );
+    res.json(enriched);
+  });
+
+  app.post("/api/trainer-assignments", requireRole("admin"), async (req, res) => {
+    const { userId, trainingId } = req.body;
+    if (!userId || !trainingId) {
+      return res.status(400).json({ message: "userId and trainingId are required" });
+    }
+    const assignment = await storage.createTrainerAssignment({ userId, trainingId });
+    res.status(201).json(assignment);
+  });
+
+  app.delete("/api/trainer-assignments/:id", requireRole("admin"), async (req, res) => {
+    await storage.deleteTrainerAssignment(parseInt(req.params.id));
+    res.json({ message: "Assignment removed" });
+  });
+
+  // ─── Students ───
+  app.get("/api/students", requireAuth, async (_req, res) => {
+    const allStudents = await storage.getStudents();
+    res.json(allStudents);
+  });
+
+  app.get("/api/students/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     const student = await storage.getStudent(id);
     if (!student) return res.status(404).json({ message: "Student not found" });
@@ -93,7 +265,7 @@ export async function registerRoutes(
     res.json({ student, enrollments: enrichedEnrollments, attendanceHistory });
   });
 
-  app.post("/api/students", async (req, res) => {
+  app.post("/api/students", requireRole("admin"), async (req, res) => {
     const parsed = insertStudentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const student = await storage.createStudent(parsed.data);
@@ -101,7 +273,22 @@ export async function registerRoutes(
   });
 
   // ─── Trainings ───
-  app.get("/api/trainings", async (_req, res) => {
+  app.get("/api/trainings", requireAuth, async (req, res) => {
+    if (req.session.role === "trainer") {
+      const assignments = await storage.getTrainerAssignments(req.session.userId!);
+      const assignedIds = assignments.map((a) => a.trainingId);
+      const allTrainings = await storage.getTrainings();
+      const filtered = allTrainings.filter((t) => assignedIds.includes(t.id));
+      const enriched = await Promise.all(
+        filtered.map(async (t) => {
+          const enrolled = await storage.getEnrollmentsByTraining(t.id);
+          const lvls = await storage.getLevelsByTraining(t.id);
+          return { ...t, enrolledCount: enrolled.length, levelsCount: lvls.length };
+        })
+      );
+      return res.json(enriched);
+    }
+
     const allTrainings = await storage.getTrainings();
     const enriched = await Promise.all(
       allTrainings.map(async (t) => {
@@ -113,10 +300,17 @@ export async function registerRoutes(
     res.json(enriched);
   });
 
-  app.get("/api/trainings/:id", async (req, res) => {
+  app.get("/api/trainings/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     const training = await storage.getTraining(id);
     if (!training) return res.status(404).json({ message: "Training not found" });
+
+    if (req.session.role === "trainer") {
+      const assignments = await storage.getTrainerAssignments(req.session.userId!);
+      if (!assignments.some((a) => a.trainingId === id)) {
+        return res.status(403).json({ message: "Not assigned to this training" });
+      }
+    }
 
     const trainingLevels = await storage.getLevelsByTraining(id);
     const levelsWithSessions = await Promise.all(
@@ -170,7 +364,7 @@ export async function registerRoutes(
     });
   });
 
-  app.post("/api/trainings", async (req, res) => {
+  app.post("/api/trainings", requireRole("admin"), async (req, res) => {
     const parsed = insertTrainingSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
 
@@ -196,7 +390,7 @@ export async function registerRoutes(
   });
 
   // ─── Enrollments ───
-  app.post("/api/enrollments", async (req, res) => {
+  app.post("/api/enrollments", requireRole("admin"), async (req, res) => {
     const { studentId, trainingId } = req.body;
     if (!studentId || !trainingId || typeof studentId !== "number" || typeof trainingId !== "number") {
       return res.status(400).json({ message: "Valid studentId and trainingId are required" });
@@ -223,10 +417,19 @@ export async function registerRoutes(
   });
 
   // ─── Attendance ───
-  app.get("/api/attendance/options", async (_req, res) => {
-    const allTrainings = await storage.getTrainings();
+  app.get("/api/attendance/options", requireRole("admin", "trainer"), async (req, res) => {
+    let trainingsList;
+    if (req.session.role === "trainer") {
+      const assignments = await storage.getTrainerAssignments(req.session.userId!);
+      const assignedIds = assignments.map((a) => a.trainingId);
+      const allTrainings = await storage.getTrainings();
+      trainingsList = allTrainings.filter((t) => assignedIds.includes(t.id));
+    } else {
+      trainingsList = await storage.getTrainings();
+    }
+
     const options = await Promise.all(
-      allTrainings.map(async (t) => {
+      trainingsList.map(async (t) => {
         const lvls = await storage.getLevelsByTraining(t.id);
         const levelsWithSessions = await Promise.all(
           lvls.map(async (l) => {
@@ -249,7 +452,7 @@ export async function registerRoutes(
     res.json(options);
   });
 
-  app.get("/api/attendance/:sessionId", async (req, res) => {
+  app.get("/api/attendance/:sessionId", requireRole("admin", "trainer"), async (req, res) => {
     const sessionId = parseInt(req.params.sessionId);
     const session = await storage.getSession(sessionId);
     if (!session) return res.status(404).json({ message: "Session not found" });
@@ -281,7 +484,7 @@ export async function registerRoutes(
     res.json(records);
   });
 
-  app.post("/api/attendance/bulk", async (req, res) => {
+  app.post("/api/attendance/bulk", requireRole("admin", "trainer"), async (req, res) => {
     const { records } = req.body;
     if (!Array.isArray(records)) {
       return res.status(400).json({ message: "records array is required" });
@@ -303,7 +506,7 @@ export async function registerRoutes(
   });
 
   // ─── Certificates ───
-  app.get("/api/certificates", async (_req, res) => {
+  app.get("/api/certificates", requireRole("admin"), async (_req, res) => {
     const certs = await storage.getCertificates();
     const enriched = await Promise.all(
       certs.map(async (cert) => {
@@ -319,7 +522,7 @@ export async function registerRoutes(
     res.json(enriched);
   });
 
-  app.get("/api/certificates/eligible", async (_req, res) => {
+  app.get("/api/certificates/eligible", requireRole("admin"), async (_req, res) => {
     const allTrainings = await storage.getTrainings();
     const eligibleStudents = [];
 
@@ -373,7 +576,7 @@ export async function registerRoutes(
     res.json(eligibleStudents);
   });
 
-  app.post("/api/certificates", async (req, res) => {
+  app.post("/api/certificates", requireRole("admin"), async (req, res) => {
     const { studentId, trainingId } = req.body;
     if (!studentId || !trainingId || typeof studentId !== "number" || typeof trainingId !== "number") {
       return res.status(400).json({ message: "Valid studentId and trainingId are required" });
@@ -404,7 +607,7 @@ export async function registerRoutes(
     }
 
     if (levelsCompleted < 4) {
-      return res.status(400).json({ message: "Student has not completed all 4 levels and is not eligible for certification" });
+      return res.status(400).json({ message: "Student has not completed all 4 levels" });
     }
 
     const now = new Date();
@@ -419,8 +622,141 @@ export async function registerRoutes(
     res.status(201).json(cert);
   });
 
-  // ─── Dashboard ───
-  app.get("/api/dashboard/stats", async (_req, res) => {
+  // ─── Student self-service endpoints ───
+  app.get("/api/my/dashboard", requireRole("student"), async (req, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || !user.studentId) {
+      return res.status(400).json({ message: "No student profile linked" });
+    }
+
+    const student = await storage.getStudent(user.studentId);
+    if (!student) return res.status(404).json({ message: "Student not found" });
+
+    const myEnrollments = await storage.getEnrollmentsByStudent(user.studentId);
+    const formations = [];
+
+    for (const enrollment of myEnrollments) {
+      const training = await storage.getTraining(enrollment.trainingId);
+      if (!training) continue;
+
+      const trainingLevels = await storage.getLevelsByTraining(training.id);
+      let totalSessions = 0;
+      let attendedSessions = 0;
+      let levelsCompleted = 0;
+
+      for (const level of trainingLevels) {
+        const levelSessions = await storage.getSessionsByLevel(level.id);
+        totalSessions += levelSessions.length;
+        let allAttended = levelSessions.length > 0;
+
+        for (const session of levelSessions) {
+          const records = await storage.getAttendanceBySession(session.id);
+          const myRecord = records.find((a) => a.studentId === user.studentId! && a.present);
+          if (myRecord) attendedSessions++;
+          else allAttended = false;
+        }
+        if (allAttended && levelSessions.length > 0) levelsCompleted++;
+      }
+
+      const eligible = levelsCompleted >= 4;
+      const existingCert = await storage.getCertificate(user.studentId, training.id);
+
+      let status = "In Progress";
+      if (existingCert) status = "Certified";
+      else if (eligible) status = "Eligible for Certification";
+
+      formations.push({
+        training,
+        currentLevel: enrollment.currentLevel,
+        totalSessions,
+        attendedSessions,
+        levelsCompleted,
+        totalLevels: 4,
+        progress: totalSessions > 0 ? Math.round((attendedSessions / totalSessions) * 100) : 0,
+        eligible,
+        status,
+        certificateNumber: existingCert?.certificateNumber,
+      });
+    }
+
+    const allAttendance = await storage.getAttendanceByStudent(user.studentId);
+    const attendanceHistory = [];
+    for (const record of allAttendance) {
+      const session = await storage.getSession(record.sessionId);
+      if (!session) continue;
+      const allLevels = await Promise.all(
+        (await storage.getTrainings()).map(async (t) => {
+          const lvls = await storage.getLevelsByTraining(t.id);
+          return lvls.map((l) => ({ ...l, trainingName: t.name }));
+        })
+      );
+      const flatLevels = allLevels.flat();
+      const level = flatLevels.find((l) => l.id === session.levelId);
+      attendanceHistory.push({
+        sessionTitle: session.title,
+        trainingName: level?.trainingName || "Unknown",
+        levelName: level?.name || "Unknown",
+        date: record.markedAt || "",
+        present: record.present,
+      });
+    }
+
+    const myCerts = await storage.getCertificatesByStudent(user.studentId);
+    const enrichedCerts = await Promise.all(
+      myCerts.map(async (c) => {
+        const t = await storage.getTraining(c.trainingId);
+        return { ...c, trainingName: t?.name || "Unknown" };
+      })
+    );
+
+    res.json({
+      student,
+      formations,
+      attendanceHistory,
+      certificates: enrichedCerts,
+    });
+  });
+
+  // ─── Trainer dashboard ───
+  app.get("/api/trainer/dashboard", requireRole("trainer"), async (req, res) => {
+    const assignments = await storage.getTrainerAssignments(req.session.userId!);
+    const assignedTrainings = [];
+
+    for (const assignment of assignments) {
+      const training = await storage.getTraining(assignment.trainingId);
+      if (!training) continue;
+
+      const trainingEnrollments = await storage.getEnrollmentsByTraining(training.id);
+      const trainingLevels = await storage.getLevelsByTraining(training.id);
+
+      let totalPossible = 0;
+      let totalAttended = 0;
+
+      for (const enrollment of trainingEnrollments) {
+        for (const level of trainingLevels) {
+          const levelSessions = await storage.getSessionsByLevel(level.id);
+          totalPossible += levelSessions.length;
+          for (const session of levelSessions) {
+            const records = await storage.getAttendanceBySession(session.id);
+            const found = records.find((a) => a.studentId === enrollment.studentId && a.present);
+            if (found) totalAttended++;
+          }
+        }
+      }
+
+      assignedTrainings.push({
+        training,
+        enrolledCount: trainingEnrollments.length,
+        levelsCount: trainingLevels.length,
+        avgAttendance: totalPossible > 0 ? Math.round((totalAttended / totalPossible) * 100) : 0,
+      });
+    }
+
+    res.json({ assignedTrainings });
+  });
+
+  // ─── Dashboard (Admin) ───
+  app.get("/api/dashboard/stats", requireRole("admin"), async (_req, res) => {
     const totalStudents = await storage.getStudentCount();
     const activeTrainings = await storage.getActiveTrainingCount();
     const certificatesIssued = await storage.getCertificateCount();
@@ -465,13 +801,9 @@ export async function registerRoutes(
       })
     );
 
-    const recentActivity: Array<{
-      id: number;
-      studentName: string;
-      action: string;
-      detail: string;
-      time: string;
-    }> = [];
+    const allUsers = await storage.getUsers();
+    const totalUsers = allUsers.length;
+    const trainerCount = allUsers.filter((u) => u.role === "trainer").length;
 
     res.json({
       totalStudents,
@@ -479,7 +811,9 @@ export async function registerRoutes(
       todayAttendance,
       certificatesIssued,
       trainingProgress,
-      recentActivity,
+      totalUsers,
+      trainerCount,
+      recentActivity: [],
     });
   });
 
