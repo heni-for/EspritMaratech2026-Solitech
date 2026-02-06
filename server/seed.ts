@@ -6,7 +6,7 @@ export async function seedDatabase() {
 
   if (existingUsers.length === 0) {
     console.log("Creating default admin user...");
-    const hashedPassword = await bcrypt.hash("admin123", 10);
+    const hashedPassword = await bcrypt.hash("admin", 10);
     await storage.createUser({
       username: "admin",
       password: hashedPassword,
