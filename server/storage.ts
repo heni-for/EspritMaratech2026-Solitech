@@ -18,8 +18,7 @@ export async function initializeStorage() {
       storageType = "mock";
     }
   } catch (error) {
-    console.warn("Failed to initialize MongoDB storage, falling back to mock storage:", error);
-    storage = mockStorage;
-    storageType = "mock";
+    console.error("Failed to initialize MongoDB storage:", error);
+    throw error;
   }
 }

@@ -79,7 +79,7 @@ export default function AttendancePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attendance", selectedSession] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({ title: "Presences enregistrees avec succes" });
+      toast({ title: "Seance validee avec succes" });
     },
     onError: (error: Error) => {
       toast({ title: "Erreur lors de l'enregistrement", description: error.message, variant: "destructive" });
@@ -114,6 +114,7 @@ export default function AttendancePage() {
     if (!selectedSession) return;
     const source = attendanceData || [];
     const ids = new Set<string>([
+      ...source.map((r) => r.studentId),
       ...Array.from(attendanceState.keys()),
       ...Array.from(notesState.keys()),
       ...Array.from(commentsState.keys()),
@@ -270,11 +271,11 @@ export default function AttendancePage() {
             </CardTitle>
             <Button
               onClick={handleSave}
-              disabled={saveMutation.isPending || attendanceState.size === 0}
+              disabled={saveMutation.isPending || !attendanceData || attendanceData.length === 0}
               data-testid="button-save-attendance"
             >
               <Save className="h-4 w-4 mr-2" />
-              {saveMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+              {saveMutation.isPending ? "Validation..." : "Valider la seance"}
             </Button>
           </CardHeader>
           <CardContent className="p-0">

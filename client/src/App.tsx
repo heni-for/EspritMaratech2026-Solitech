@@ -40,7 +40,7 @@ function AdminRoutes() {
       <Route path="/trainings/:id" component={TrainingDetailPage} />
       <Route path="/attendance" component={AttendancePage} />
       <Route path="/certificates" component={CertificatesPage} />
-      <Route path="/users" component={UserManagement} />
+      <Route path="/encadrants" component={UserManagement} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>

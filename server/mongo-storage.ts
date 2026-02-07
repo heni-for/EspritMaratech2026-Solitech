@@ -53,6 +53,7 @@ export interface IStorageMongo {
   getEnrollmentsByStudent(studentId: string): Promise<any[]>;
   getEnrollment(studentId: string, trainingId: string): Promise<any | undefined>;
   createEnrollment(data: any): Promise<any>;
+  updateEnrollment(studentId: string, trainingId: string, data: Partial<any>): Promise<any | undefined>;
   
   getAttendanceBySession(sessionId: string): Promise<any[]>;
   getAttendanceByStudent(studentId: string): Promise<any[]>;
@@ -253,6 +254,15 @@ export class MongoDBStorage implements IStorageMongo {
       updatedAt: new Date(),
     });
     return normalizeDoc({ _id: result.insertedId, ...data });
+  }
+
+  async updateEnrollment(studentId: string, trainingId: string, data: Partial<any>): Promise<any | undefined> {
+    const result = await db.collection("enrollments").findOneAndUpdate(
+      { studentId: new ObjectId(studentId), trainingId: new ObjectId(trainingId) },
+      { $set: { ...data, updatedAt: new Date() } },
+      { returnDocument: "after" }
+    );
+    return normalizeDoc(result.value);
   }
 
   // Attendance operations

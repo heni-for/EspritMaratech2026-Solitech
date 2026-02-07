@@ -86,7 +86,7 @@ const chartPeriods = ["1s", "1m", "3m", "1a", "tout"];
 const managementLinks = [
   { title: "Eleves", icon: Users, href: "/students", color: "bg-violet-500/15 text-violet-600 dark:text-violet-400" },
   { title: "Formations", icon: BookOpen, href: "/trainings", color: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
-  { title: "Encadrants", icon: UserCog, href: "/users", color: "bg-blue-500/15 text-blue-600 dark:text-blue-400" },
+  { title: "Encadrants", icon: UserCog, href: "/encadrants", color: "bg-blue-500/15 text-blue-600 dark:text-blue-400" },
   { title: "Inscriptions", icon: GraduationCap, href: "/trainings", color: "bg-teal-500/15 text-teal-600 dark:text-teal-400" },
   { title: "Presences", icon: ClipboardCheck, href: "/attendance", color: "bg-purple-500/15 text-purple-600 dark:text-purple-400" },
   { title: "Certificats", icon: Award, href: "/certificates", color: "bg-rose-500/15 text-rose-600 dark:text-rose-400" },

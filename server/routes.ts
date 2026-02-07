@@ -87,6 +87,37 @@ async function buildTrainingProgress(trainingId: any, studentId: any) {
   };
 }
 
+async function computeCurrentLevelStrict(trainingId: any, studentId: any) {
+  const trainingLevels = await storage.getLevelsByTraining(trainingId);
+  const sortedLevels = [...trainingLevels].sort((a: any, b: any) => (a.levelNumber || 0) - (b.levelNumber || 0));
+  if (sortedLevels.length === 0) {
+    return { nextLevel: 1, completed: false };
+  }
+  let nextLevel = sortedLevels[0].levelNumber || 1;
+  let allValidated = true;
+
+  for (const level of sortedLevels) {
+    const levelSessions = await storage.getSessionsByLevel(level.id);
+    let presentCount = 0;
+    for (const session of levelSessions) {
+      const sessionRecords = await storage.getAttendanceBySession(session.id);
+      const studentRecord = sessionRecords.find((a: any) => a.studentId === studentId);
+      if (studentRecord?.present) presentCount++;
+    }
+    const levelValidated = levelSessions.length > 0 && presentCount === levelSessions.length;
+    if (!levelValidated) {
+      nextLevel = level.levelNumber || nextLevel;
+      allValidated = false;
+      break;
+    }
+    nextLevel = (level.levelNumber || nextLevel) + 1;
+  }
+
+  const maxLevel = sortedLevels.length > 0 ? sortedLevels[sortedLevels.length - 1].levelNumber : 1;
+  if (allValidated) nextLevel = maxLevel;
+  return { nextLevel: Math.max(1, Math.min(nextLevel, maxLevel)), completed: allValidated };
+}
+
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Not authenticated" });
@@ -221,7 +252,11 @@ export async function registerRoutes(
   app.post("/api/users", requireRole("admin"), async (req, res) => {
     const { username, password, fullName, role, studentId } = req.body;
     if (!username || !password || !fullName || !role) {
-      return res.status(400).json({ message: "username, password, fullName, and role are required" });
+      if (role === "trainer" && username && fullName && role) {
+        // allow trainer without password (auto-generated)
+      } else {
+        return res.status(400).json({ message: "username, password, fullName, and role are required" });
+      }
     }
     if (!["admin", "trainer", "student"].includes(role)) {
       return res.status(400).json({ message: "Invalid role. Must be admin, trainer, or student" });
@@ -232,7 +267,8 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Username already exists" });
     }
 
-    const hashed = await bcrypt.hash(password, 10);
+    const plainPassword = role === "trainer" && !password ? generatePassword(8) : password;
+    const hashed = await bcrypt.hash(plainPassword, 10);
     const user = await storage.createUser({
       username,
       password: hashed,
@@ -241,12 +277,37 @@ export async function registerRoutes(
       studentId: studentId || null,
     });
 
+    let emailSent = false;
+    const emailEnabled = String(process.env.EMAIL_NOTIFICATIONS_ENABLED || "false").toLowerCase() === "true";
+    const looksLikeEmail = typeof username === "string" && username.includes("@");
+    if (role === "trainer" && emailEnabled && looksLikeEmail) {
+      const mailer = getMailer();
+      if (mailer) {
+        const from = process.env.SMTP_FROM || "no-reply@astba.local";
+        const appName = process.env.APP_NAME || "ASTBA";
+        try {
+          await mailer.sendMail({
+            from,
+            to: username,
+            subject: `${appName} - Vos identifiants formateur`,
+            text: `Bonjour ${fullName},\n\nVotre compte formateur a ete cree.\n\nIdentifiant: ${username}\nMot de passe: ${plainPassword}\n\nMerci,\n${appName}`,
+          });
+          emailSent = true;
+        } catch (err) {
+          console.error("Failed to send trainer credentials email:", err);
+        }
+      } else {
+        console.warn("SMTP not configured. Trainer email not sent.");
+      }
+    }
+
     res.status(201).json({
       id: user.id,
       username: user.username,
       fullName: user.fullName,
       role: user.role,
       studentId: user.studentId,
+      emailSent,
     });
   });
 
@@ -903,6 +964,11 @@ export async function registerRoutes(
           });
         }
       }
+      const levelUpdate = await computeCurrentLevelStrict(pair.trainingId, pair.studentId);
+      await storage.updateEnrollment?.(pair.studentId, pair.trainingId, {
+        currentLevel: levelUpdate.nextLevel,
+        status: levelUpdate.completed ? "completed" : "active",
+      });
     }
 
     res.json(results);
@@ -1038,6 +1104,7 @@ export async function registerRoutes(
       formations.push({
         training,
         currentLevel: enrollment.currentLevel ?? 1,
+        enrollmentStatus: enrollment.status || "active",
         ...progress,
         progress: progress.totalSessions > 0 ? Math.round((progress.attendedSessions / progress.totalSessions) * 100) : 0,
         status,

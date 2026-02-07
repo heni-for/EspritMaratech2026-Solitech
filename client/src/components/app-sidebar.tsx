@@ -33,7 +33,7 @@ const adminMenuItems = [
   { title: "Formations", url: "/trainings", icon: BookOpen, color: "text-amber-600 dark:text-amber-400" },
   { title: "Presences", url: "/attendance", icon: ClipboardCheck, color: "text-violet-500 dark:text-violet-400" },
   { title: "Certificats", url: "/certificates", icon: Award, color: "text-orange-500 dark:text-orange-400" },
-  { title: "Encadrants", url: "/users", icon: UserCog, color: "text-slate-400 dark:text-slate-500" },
+  { title: "Encadrants", url: "/encadrants", icon: UserCog, color: "text-slate-400 dark:text-slate-500" },
 ];
 
 const trainerMenuItems = [

@@ -322,11 +322,27 @@ export class MockStorage {
       trainingId,
       enrollmentDate: (data as any).enrollmentDate || new Date().toISOString().split('T')[0],
       status: (data as any).status || "active",
+      currentLevel: (data as any).currentLevel ?? 1,
+      enrolled: (data as any).enrolled ?? true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     this.enrollments.set(`${studentId}-${trainingId}`, enrollment);
     return enrollment;
+  }
+
+  async updateEnrollment(studentId: number, trainingId: number, data: Partial<any>): Promise<Enrollment | undefined> {
+    const sId = toNumberId(studentId);
+    const tId = toNumberId(trainingId);
+    const existing = this.enrollments.get(`${sId}-${tId}`);
+    if (!existing) return undefined;
+    const updated: Enrollment = {
+      ...existing,
+      ...(data as any),
+      updatedAt: new Date(),
+    };
+    this.enrollments.set(`${sId}-${tId}`, updated);
+    return updated;
   }
 
   async getAttendanceBySession(sessionId: number): Promise<Attendance[]> {

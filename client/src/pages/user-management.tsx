@@ -68,8 +68,7 @@ interface TrainingData {
 
 const trainerSchema = z.object({
   fullName: z.string().min(1, "Nom complet requis"),
-  username: z.string().min(1, "Identifiant requis"),
-  password: z.string().min(4, "Minimum 4 caracteres"),
+  username: z.string().email("Email valide requis"),
 });
 
 type TrainerFormValues = z.infer<typeof trainerSchema>;
@@ -80,13 +79,13 @@ export default function UserManagement() {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedTrainer, setSelectedTrainer] = useState<UserData | null>(null);
   const [assignTrainingId, setAssignTrainingId] = useState("");
+  const [selectedTrainings, setSelectedTrainings] = useState<string[]>([]);
 
   const form = useForm<TrainerFormValues>({
     resolver: zodResolver(trainerSchema),
     defaultValues: {
       fullName: "",
       username: "",
-      password: "",
     },
   });
 
@@ -114,12 +113,25 @@ export default function UserManagement() {
         role: "trainer",
         studentId: null,
       });
-      return res.json();
+      const created = await res.json();
+      if (selectedTrainings.length > 0) {
+        await Promise.all(
+          selectedTrainings.map((trainingId) =>
+            apiRequest("POST", "/api/trainer-assignments", {
+              userId: created.id,
+              trainingId,
+            })
+          )
+        );
+      }
+      return created;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trainer-assignments"] });
       setDialogOpen(false);
       form.reset();
+      setSelectedTrainings([]);
       toast({ title: "Encadrant ajoute avec succes" });
     },
     onError: (err: any) => {
@@ -219,27 +231,67 @@ export default function UserManagement() {
                   name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Identifiant</FormLabel>
+                      <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input data-testid="input-trainer-username" placeholder="Ex: mohamed.ali" {...field} />
+                        <Input
+                          type="email"
+                          data-testid="input-trainer-username"
+                          placeholder="Ex: formateur@email.com"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Mot de passe</FormLabel>
-                      <FormControl>
-                        <Input type="password" data-testid="input-trainer-password" placeholder="Minimum 4 caracteres" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <div className="text-xs text-muted-foreground">
+                  Le mot de passe est genere automatiquement et envoye par email.
+                </div>
+                <div className="space-y-2">
+                  <FormLabel>Formations a enseigner</FormLabel>
+                  <p className="text-xs text-muted-foreground">Selectionnez une ou plusieurs formations</p>
+                  <Select
+                    value=""
+                    onValueChange={(val) => {
+                      if (!selectedTrainings.includes(val)) {
+                        setSelectedTrainings((prev) => [...prev, val]);
+                      }
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-trainer-formations">
+                      <SelectValue placeholder="Choisir une formation..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(trainingsData || [])
+                        .filter((t) => !selectedTrainings.includes(t.id))
+                        .map((t) => (
+                          <SelectItem key={t.id} value={String(t.id)}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      {(trainingsData || []).filter((t) => !selectedTrainings.includes(t.id)).length === 0 && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">Toutes les formations sont selectionnees</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {selectedTrainings.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedTrainings.map((id) => {
+                        const t = (trainingsData || []).find((tr) => tr.id === id);
+                        return t ? (
+                          <Badge
+                            key={id}
+                            variant="secondary"
+                            className="text-xs cursor-pointer"
+                            onClick={() => setSelectedTrainings((prev) => prev.filter((x) => x !== id))}
+                          >
+                            {t.name} &times;
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
                   )}
-                />
+                </div>
                 <Button type="submit" className="w-full" disabled={createTrainerMutation.isPending} data-testid="button-submit-trainer">
                   {createTrainerMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
                   Creer l'encadrant
