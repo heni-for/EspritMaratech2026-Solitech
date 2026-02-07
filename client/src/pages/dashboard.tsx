@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,9 +98,46 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activePeriod, setActivePeriod] = useState("1s");
   const [activeFormation, setActiveFormation] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const isSwiping = useRef(false);
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
   });
+
+  const maxFormations = stats?.trainingProgress ? Math.min(stats.trainingProgress.length, 4) : 0;
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    isSwiping.current = false;
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const diffX = Math.abs(e.touches[0].clientX - touchStartX.current);
+    const diffY = Math.abs(e.touches[0].clientY - touchStartY.current);
+    if (diffX > diffY && diffX > 10) {
+      isSwiping.current = true;
+      e.preventDefault();
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const diffX = e.changedTouches[0].clientX - touchStartX.current;
+    const threshold = 40;
+    if (Math.abs(diffX) > threshold && isSwiping.current) {
+      if (diffX < 0 && activeFormation < maxFormations - 1) {
+        setActiveFormation((prev) => prev + 1);
+      } else if (diffX > 0 && activeFormation > 0) {
+        setActiveFormation((prev) => prev - 1);
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+    isSwiping.current = false;
+  }, [activeFormation, maxFormations]);
 
   const statCards = [
     { label: "Total eleves", value: stats?.totalStudents ?? 0, icon: Users, color: "bg-violet-500/15 text-violet-600 dark:text-violet-400", change: null },
@@ -294,7 +331,14 @@ export default function Dashboard() {
               </div>
             ) : stats?.trainingProgress && stats.trainingProgress.length > 0 ? (
               <>
-                <div className="relative flex items-center justify-center py-4" style={{ minHeight: "200px" }}>
+                <div
+                  className="relative flex items-center justify-center py-4 touch-pan-y select-none"
+                  style={{ minHeight: "200px" }}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  data-testid="formation-carousel"
+                >
                   {stats.trainingProgress.slice(0, 4).map((tp, idx, arr) => {
                     const gradients = [
                       "linear-gradient(135deg, hsl(248, 55%, 55%) 0%, hsl(248, 45%, 40%) 100%)",
