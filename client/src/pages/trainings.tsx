@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -193,37 +192,48 @@ export default function TrainingsPage() {
                   {trainers.length === 0 ? (
                     <p className="text-xs text-muted-foreground py-2">Aucun encadrant disponible. Creez-en un d'abord.</p>
                   ) : (
-                    <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2">
-                      {trainers.map((trainer) => (
-                        <label
-                          key={trainer.id}
-                          className="flex items-center gap-3 p-2 rounded-md hover-elevate cursor-pointer"
-                          data-testid={`checkbox-trainer-${trainer.id}`}
-                        >
-                          <Checkbox
-                            checked={selectedTrainers.includes(trainer.id)}
-                            onCheckedChange={() => toggleTrainer(trainer.id)}
-                          />
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-semibold flex-shrink-0">
-                              <UserCog className="h-3.5 w-3.5" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{trainer.fullName || trainer.username}</p>
-                              <p className="text-xs text-muted-foreground truncate">@{trainer.username}</p>
-                            </div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
+                    <Select
+                      onValueChange={(val) => {
+                        const id = Number(val);
+                        if (!selectedTrainers.includes(id)) {
+                          setSelectedTrainers((prev) => [...prev, id]);
+                        }
+                      }}
+                      value=""
+                    >
+                      <SelectTrigger data-testid="select-trainer-dropdown">
+                        <SelectValue placeholder="Choisir un encadrant..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {trainers
+                          .filter((t) => !selectedTrainers.includes(t.id))
+                          .map((trainer) => (
+                            <SelectItem key={trainer.id} value={String(trainer.id)} data-testid={`select-trainer-${trainer.id}`}>
+                              <div className="flex items-center gap-2">
+                                <UserCog className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span>{trainer.fullName || trainer.username}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        {trainers.filter((t) => !selectedTrainers.includes(t.id)).length === 0 && (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">Tous les encadrants sont selectionnes</div>
+                        )}
+                      </SelectContent>
+                    </Select>
                   )}
                   {selectedTrainers.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {selectedTrainers.map((id) => {
                         const t = trainers.find((tr) => tr.id === id);
                         return t ? (
-                          <Badge key={id} variant="secondary" className="text-xs">
-                            {t.fullName || t.username}
+                          <Badge
+                            key={id}
+                            variant="secondary"
+                            className="text-xs cursor-pointer"
+                            onClick={() => setSelectedTrainers((prev) => prev.filter((x) => x !== id))}
+                            data-testid={`badge-trainer-${id}`}
+                          >
+                            {t.fullName || t.username} &times;
                           </Badge>
                         ) : null;
                       })}
