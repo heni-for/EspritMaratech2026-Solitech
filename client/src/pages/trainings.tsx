@@ -25,22 +25,43 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { insertTrainingSchema, type Training, type InsertTraining, type Student, type User } from "@shared/schema";
+import { insertTrainingSchema, type InsertTraining } from "@shared/schema";
 import { Plus, BookOpen, Users, Eye, UserPlus, UserCog } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 
-interface TrainingWithStats extends Training {
+interface TrainingWithStats {
+  id: string;
+  name: string;
+  description?: string | null;
+  startDate?: string | null;
+  status: string;
   enrolledCount: number;
   levelsCount: number;
+}
+
+interface StudentLite {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface UserLite {
+  id: string;
+  username: string;
+  fullName?: string | null;
+  role: string;
 }
 
 export default function TrainingsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
-  const [selectedTraining, setSelectedTraining] = useState<number | null>(null);
+  const [selectedTraining, setSelectedTraining] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<string>("");
-  const [selectedTrainers, setSelectedTrainers] = useState<number[]>([]);
+  const [selectedTrainers, setSelectedTrainers] = useState<string[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [levelsCount, setLevelsCount] = useState("4");
+  const [sessionsPerLevel, setSessionsPerLevel] = useState("6");
   const { toast } = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -49,11 +70,11 @@ export default function TrainingsPage() {
     queryKey: ["/api/trainings"],
   });
 
-  const { data: students = [] } = useQuery<Student[]>({
+  const { data: students = [] } = useQuery<StudentLite[]>({
     queryKey: ["/api/students"],
   });
 
-  const { data: users = [] } = useQuery<User[]>({
+  const { data: users = [] } = useQuery<UserLite[]>({
     queryKey: ["/api/users"],
     enabled: isAdmin,
   });
@@ -75,6 +96,9 @@ export default function TrainingsPage() {
       const res = await apiRequest("POST", "/api/trainings", {
         ...data,
         trainerIds: selectedTrainers,
+        studentIds: selectedStudents,
+        levelsCount,
+        sessionsPerLevel,
       });
       return res.json();
     },
@@ -85,6 +109,9 @@ export default function TrainingsPage() {
       setDialogOpen(false);
       form.reset();
       setSelectedTrainers([]);
+      setSelectedStudents([]);
+      setLevelsCount("4");
+      setSessionsPerLevel("6");
       toast({ title: "Formation creee avec succes" });
     },
     onError: (error: Error) => {
@@ -93,7 +120,7 @@ export default function TrainingsPage() {
   });
 
   const enrollMutation = useMutation({
-    mutationFn: async ({ studentId, trainingId }: { studentId: number; trainingId: number }) => {
+    mutationFn: async ({ studentId, trainingId }: { studentId: string; trainingId: string }) => {
       const res = await apiRequest("POST", "/api/enrollments", { studentId, trainingId });
       return res.json();
     },
@@ -109,14 +136,6 @@ export default function TrainingsPage() {
     },
   });
 
-  const toggleTrainer = (trainerId: number) => {
-    setSelectedTrainers((prev) =>
-      prev.includes(trainerId)
-        ? prev.filter((id) => id !== trainerId)
-        : [...prev, trainerId]
-    );
-  };
-
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -131,6 +150,9 @@ export default function TrainingsPage() {
             setDialogOpen(open);
             if (!open) {
               setSelectedTrainers([]);
+              setSelectedStudents([]);
+              setLevelsCount("4");
+              setSessionsPerLevel("6");
               form.reset();
             }
           }}>
@@ -140,110 +162,196 @@ export default function TrainingsPage() {
                 Nouvelle formation
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Creer une formation</DialogTitle>
               </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nom de la formation</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ex: Robotique fondamentale" {...field} data-testid="input-training-name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Description de la formation..." {...field} value={field.value ?? ""} data-testid="input-training-desc" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="startDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Date de debut</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} value={field.value ?? ""} data-testid="input-training-date" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Encadrants</label>
-                  <p className="text-xs text-muted-foreground">Selectionnez les encadrants pour cette formation</p>
-                  {trainers.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-2">Aucun encadrant disponible. Creez-en un d'abord.</p>
-                  ) : (
-                    <Select
-                      onValueChange={(val) => {
-                        const id = Number(val);
-                        if (!selectedTrainers.includes(id)) {
-                          setSelectedTrainers((prev) => [...prev, id]);
-                        }
-                      }}
-                      value=""
-                    >
-                      <SelectTrigger data-testid="select-trainer-dropdown">
-                        <SelectValue placeholder="Choisir un encadrant..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {trainers
-                          .filter((t) => !selectedTrainers.includes(t.id))
-                          .map((trainer) => (
-                            <SelectItem key={trainer.id} value={String(trainer.id)} data-testid={`select-trainer-${trainer.id}`}>
-                              <div className="flex items-center gap-2">
-                                <UserCog className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span>{trainer.fullName || trainer.username}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        {trainers.filter((t) => !selectedTrainers.includes(t.id)).length === 0 && (
-                          <div className="px-2 py-1.5 text-xs text-muted-foreground">Tous les encadrants sont selectionnes</div>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {selectedTrainers.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {selectedTrainers.map((id) => {
-                        const t = trainers.find((tr) => tr.id === id);
-                        return t ? (
-                          <Badge
-                            key={id}
-                            variant="secondary"
-                            className="text-xs cursor-pointer"
-                            onClick={() => setSelectedTrainers((prev) => prev.filter((x) => x !== id))}
-                            data-testid={`badge-trainer-${id}`}
-                          >
-                            {t.fullName || t.username} &times;
-                          </Badge>
-                        ) : null;
-                      })}
+              <form onSubmit={form.handleSubmit((data) => createMutation.mutate(data))} className="space-y-5">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  <div className="space-y-4">
+                    <div className="text-sm font-semibold text-muted-foreground">Details</div>
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nom de la formation</FormLabel>
+                          <FormControl>
+                            <Input placeholder="ex: Robotique fondamentale" {...field} data-testid="input-training-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea placeholder="Description de la formation..." {...field} value={field.value ?? ""} data-testid="input-training-desc" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="startDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Date de debut</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value ?? ""} data-testid="input-training-date" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Nombre de niveaux</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={levelsCount}
+                          onChange={(e) => setLevelsCount(e.target.value)}
+                          data-testid="input-levels-count"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Seances par niveau</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={sessionsPerLevel}
+                          onChange={(e) => setSessionsPerLevel(e.target.value)}
+                          data-testid="input-sessions-count"
+                        />
+                      </div>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="text-sm font-semibold text-muted-foreground">Affectations</div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Encadrants</label>
+                      <p className="text-xs text-muted-foreground">Selectionnez les encadrants pour cette formation</p>
+                      {trainers.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-2">Aucun encadrant disponible. Creez-en un d'abord.</p>
+                      ) : (
+                        <Select
+                          onValueChange={(val) => {
+                            const id = val;
+                            if (!selectedTrainers.includes(id)) {
+                              setSelectedTrainers((prev) => [...prev, id]);
+                            }
+                          }}
+                          value=""
+                        >
+                          <SelectTrigger data-testid="select-trainer-dropdown">
+                            <SelectValue placeholder="Choisir un encadrant..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {trainers
+                              .filter((t) => !selectedTrainers.includes(t.id))
+                              .map((trainer) => (
+                                <SelectItem key={trainer.id} value={String(trainer.id)} data-testid={`select-trainer-${trainer.id}`}>
+                                  <div className="flex items-center gap-2">
+                                    <UserCog className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span>{trainer.fullName || trainer.username}</span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            {trainers.filter((t) => !selectedTrainers.includes(t.id)).length === 0 && (
+                              <div className="px-2 py-1.5 text-xs text-muted-foreground">Tous les encadrants sont selectionnes</div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {selectedTrainers.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {selectedTrainers.map((id) => {
+                            const t = trainers.find((tr) => tr.id === id);
+                            return t ? (
+                              <Badge
+                                key={id}
+                                variant="secondary"
+                                className="text-xs cursor-pointer"
+                                onClick={() => setSelectedTrainers((prev) => prev.filter((x) => x !== id))}
+                                data-testid={`badge-trainer-${id}`}
+                              >
+                                {t.fullName || t.username} &times;
+                              </Badge>
+                            ) : null;
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Eleves</label>
+                      <p className="text-xs text-muted-foreground">Inscrire des eleves a cette formation (optionnel)</p>
+                      {students.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-2">Aucun eleve disponible.</p>
+                      ) : (
+                        <Select
+                          onValueChange={(val) => {
+                            if (!selectedStudents.includes(val)) {
+                              setSelectedStudents((prev) => [...prev, val]);
+                            }
+                          }}
+                          value=""
+                        >
+                          <SelectTrigger data-testid="select-student-dropdown">
+                            <SelectValue placeholder="Choisir un eleve..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {students
+                              .filter((s) => !selectedStudents.includes(s.id))
+                              .map((student) => (
+                                <SelectItem key={student.id} value={String(student.id)} data-testid={`select-student-${student.id}`}>
+                                  <div className="flex items-center gap-2">
+                                    <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span>{student.firstName} {student.lastName}</span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            {students.filter((s) => !selectedStudents.includes(s.id)).length === 0 && (
+                              <div className="px-2 py-1.5 text-xs text-muted-foreground">Tous les eleves sont selectionnes</div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {selectedStudents.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {selectedStudents.map((id) => {
+                            const s = students.find((st) => st.id === id);
+                            return s ? (
+                              <Badge
+                                key={id}
+                                variant="secondary"
+                                className="text-xs cursor-pointer"
+                                onClick={() => setSelectedStudents((prev) => prev.filter((x) => x !== id))}
+                                data-testid={`badge-student-${id}`}
+                              >
+                                {s.firstName} {s.lastName} &times;
+                              </Badge>
+                            ) : null;
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-training">
-                  {createMutation.isPending ? "Creation..." : "Creer la formation"}
-                </Button>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button type="submit" className="min-w-[200px]" disabled={createMutation.isPending} data-testid="button-submit-training">
+                    {createMutation.isPending ? "Creation..." : "Creer la formation"}
+                  </Button>
+                </div>
               </form>
             </Form>
             </DialogContent>
@@ -278,7 +386,7 @@ export default function TrainingsPage() {
               onClick={() => {
                 if (selectedTraining && selectedStudent) {
                   enrollMutation.mutate({
-                    studentId: parseInt(selectedStudent),
+                    studentId: selectedStudent,
                     trainingId: selectedTraining,
                   });
                 }

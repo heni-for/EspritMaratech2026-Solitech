@@ -26,8 +26,8 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { insertStudentSchema, type Student, type InsertStudent } from "@shared/schema";
-import { Plus, Search, Users, UserPlus, Eye } from "lucide-react";
+import { insertStudentSchema, type InsertStudent } from "@shared/schema";
+import { Plus, Search, Users, UserPlus, Eye, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 
 export default function StudentsPage() {
@@ -35,7 +35,7 @@ export default function StudentsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const { data: students = [], isLoading } = useQuery<Student[]>({
+  const { data: students = [], isLoading } = useQuery<StudentLite[]>({
     queryKey: ["/api/students"],
   });
 
@@ -66,6 +66,20 @@ export default function StudentsPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Erreur lors de l'ajout", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/students/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/students"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({ title: "Eleve supprime" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur lors de la suppression", description: error.message, variant: "destructive" });
     },
   });
 
@@ -265,13 +279,32 @@ export default function StudentsPage() {
                     <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                       {student.guardianName || "—"}
                     </TableCell>
-                    <TableCell>
-                      <Link href={`/students/${student.id}`}>
-                        <Button size="icon" variant="ghost" data-testid={`button-view-student-${student.id}`}>
-                          <Eye className="h-4 w-4" />
+                      <TableCell className="flex items-center justify-end gap-2">
+                        <Link href={`/students/${student.id}`}>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            data-icon-label={`Voir la fiche de ${student.firstName} ${student.lastName}`}
+                            data-testid={`button-view-student-${student.id}`}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          data-icon-label={`Supprimer ${student.firstName} ${student.lastName}`}
+                          onClick={() => {
+                            if (confirm("Supprimer cet eleve ?")) {
+                              deleteMutation.mutate(String(student.id));
+                            }
+                          }}
+                          disabled={deleteMutation.isPending}
+                          data-testid={`button-delete-student-${student.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
-                      </Link>
-                    </TableCell>
+                      </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -281,4 +314,14 @@ export default function StudentsPage() {
       </Card>
     </div>
   );
+}
+interface StudentLite {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  dateOfBirth?: string | null;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
 }

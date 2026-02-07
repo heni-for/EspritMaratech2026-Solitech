@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -22,18 +24,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ClipboardCheck, Users, BookOpen, CheckCircle2, XCircle, Save } from "lucide-react";
-import type { Training, Level, Session, Student } from "@shared/schema";
-
+import { ClipboardCheck, Users, Save } from "lucide-react";
+import { StatusIndicator } from "@/components/accessibility/status-indicator";
 interface TrainingOption {
-  id: number;
+  id: string;
   name: string;
   levels: Array<{
-    id: number;
+    id: string;
     levelNumber: number;
     name: string;
     sessions: Array<{
-      id: number;
+      id: string;
       sessionNumber: number;
       title: string;
     }>;
@@ -41,16 +42,20 @@ interface TrainingOption {
 }
 
 interface AttendanceRecord {
-  studentId: number;
+  studentId: string;
   studentName: string;
   present: boolean;
+  note?: number | null;
+  comment?: string | null;
 }
 
 export default function AttendancePage() {
   const [selectedTraining, setSelectedTraining] = useState<string>("");
   const [selectedLevel, setSelectedLevel] = useState<string>("");
   const [selectedSession, setSelectedSession] = useState<string>("");
-  const [attendanceState, setAttendanceState] = useState<Map<number, boolean>>(new Map());
+  const [attendanceState, setAttendanceState] = useState<Map<string, boolean>>(new Map());
+  const [notesState, setNotesState] = useState<Map<string, string>>(new Map());
+  const [commentsState, setCommentsState] = useState<Map<string, string>>(new Map());
   const { toast } = useToast();
 
   const { data: trainingOptions = [], isLoading: loadingTrainings } = useQuery<TrainingOption[]>({
@@ -67,7 +72,7 @@ export default function AttendancePage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: async (records: Array<{ studentId: number; sessionId: number; present: boolean }>) => {
+    mutationFn: async (records: Array<{ studentId: string; sessionId: string; present: boolean; note?: number | null; comment?: string | null }>) => {
       const res = await apiRequest("POST", "/api/attendance/bulk", { records });
       return res.json();
     },
@@ -81,7 +86,7 @@ export default function AttendancePage() {
     },
   });
 
-  const handleToggle = (studentId: number, present: boolean) => {
+  const handleToggle = (studentId: string, present: boolean) => {
     setAttendanceState((prev) => {
       const next = new Map(prev);
       next.set(studentId, present);
@@ -89,20 +94,64 @@ export default function AttendancePage() {
     });
   };
 
+  const handleNoteChange = (studentId: string, value: string) => {
+    setNotesState((prev) => {
+      const next = new Map(prev);
+      next.set(studentId, value);
+      return next;
+    });
+  };
+
+  const handleCommentChange = (studentId: string, value: string) => {
+    setCommentsState((prev) => {
+      const next = new Map(prev);
+      next.set(studentId, value);
+      return next;
+    });
+  };
+
   const handleSave = () => {
     if (!selectedSession) return;
-    const records = Array.from(attendanceState.entries()).map(([studentId, present]) => ({
-      studentId,
-      sessionId: parseInt(selectedSession),
-      present,
-    }));
+    const source = attendanceData || [];
+    const ids = new Set<string>([
+      ...Array.from(attendanceState.keys()),
+      ...Array.from(notesState.keys()),
+      ...Array.from(commentsState.keys()),
+    ]);
+
+    const records = Array.from(ids.values()).map((studentId) => {
+      const original = source.find((r) => r.studentId === studentId);
+      const present = attendanceState.has(studentId)
+        ? attendanceState.get(studentId)!
+        : original?.present ?? false;
+
+      const noteRaw = notesState.get(studentId);
+      const noteVal = noteRaw !== undefined && noteRaw !== "" ? Number(noteRaw) : original?.note ?? null;
+      return {
+        studentId,
+        sessionId: selectedSession,
+        present,
+        note: Number.isNaN(noteVal as number) ? null : noteVal,
+        comment: commentsState.has(studentId) ? commentsState.get(studentId)! : original?.comment ?? null,
+      };
+    });
     if (records.length > 0) {
       saveMutation.mutate(records);
     }
   };
 
-  const getPresenceStatus = (studentId: number, originalPresent: boolean) => {
+  const getPresenceStatus = (studentId: string, originalPresent: boolean) => {
     return attendanceState.has(studentId) ? attendanceState.get(studentId)! : originalPresent;
+  };
+
+  const getNoteValue = (studentId: string, originalNote?: number | null) => {
+    if (notesState.has(studentId)) return notesState.get(studentId)!;
+    return originalNote !== null && originalNote !== undefined ? String(originalNote) : "";
+  };
+
+  const getCommentValue = (studentId: string, originalComment?: string | null) => {
+    if (commentsState.has(studentId)) return commentsState.get(studentId)!;
+    return originalComment ?? "";
   };
 
   const handleTrainingChange = (value: string) => {
@@ -110,17 +159,23 @@ export default function AttendancePage() {
     setSelectedLevel("");
     setSelectedSession("");
     setAttendanceState(new Map());
+    setNotesState(new Map());
+    setCommentsState(new Map());
   };
 
   const handleLevelChange = (value: string) => {
     setSelectedLevel(value);
     setSelectedSession("");
     setAttendanceState(new Map());
+    setNotesState(new Map());
+    setCommentsState(new Map());
   };
 
   const handleSessionChange = (value: string) => {
     setSelectedSession(value);
     setAttendanceState(new Map());
+    setNotesState(new Map());
+    setCommentsState(new Map());
   };
 
   return (
@@ -139,9 +194,11 @@ export default function AttendancePage() {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Formation</label>
+              <Label className="text-sm font-medium text-muted-foreground" htmlFor="attendance-training">
+                Formation
+              </Label>
               <Select value={selectedTraining} onValueChange={handleTrainingChange}>
-                <SelectTrigger data-testid="select-training">
+                <SelectTrigger id="attendance-training" data-testid="select-training">
                   <SelectValue placeholder="Choisir une formation" />
                 </SelectTrigger>
                 <SelectContent>
@@ -154,13 +211,15 @@ export default function AttendancePage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Niveau</label>
+              <Label className="text-sm font-medium text-muted-foreground" htmlFor="attendance-level">
+                Niveau
+              </Label>
               <Select
                 value={selectedLevel}
                 onValueChange={handleLevelChange}
                 disabled={!currentTraining}
               >
-                <SelectTrigger data-testid="select-level">
+                <SelectTrigger id="attendance-level" data-testid="select-level">
                   <SelectValue placeholder="Choisir un niveau" />
                 </SelectTrigger>
                 <SelectContent>
@@ -173,13 +232,15 @@ export default function AttendancePage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Seance</label>
+              <Label className="text-sm font-medium text-muted-foreground" htmlFor="attendance-session">
+                Seance
+              </Label>
               <Select
                 value={selectedSession}
                 onValueChange={handleSessionChange}
                 disabled={!currentLevel}
               >
-                <SelectTrigger data-testid="select-session">
+                <SelectTrigger id="attendance-session" data-testid="select-session">
                   <SelectValue placeholder="Choisir une seance" />
                 </SelectTrigger>
                 <SelectContent>
@@ -237,7 +298,9 @@ export default function AttendancePage() {
                   <TableRow>
                     <TableHead className="w-[50px]">Statut</TableHead>
                     <TableHead>Eleve</TableHead>
-                    <TableHead className="w-[100px] text-center">Present</TableHead>
+                    <TableHead className="w-[90px] text-center">Present</TableHead>
+                    <TableHead className="w-[110px] text-center">Note</TableHead>
+                    <TableHead>Commentaire</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -246,11 +309,7 @@ export default function AttendancePage() {
                     return (
                       <TableRow key={record.studentId} data-testid={`row-attendance-${record.studentId}`}>
                         <TableCell>
-                          {isPresent ? (
-                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-muted-foreground" />
-                          )}
+                          <StatusIndicator status={isPresent ? "present" : "absent"} />
                         </TableCell>
                         <TableCell>
                           <span className="text-sm font-medium">{record.studentName}</span>
@@ -261,7 +320,31 @@ export default function AttendancePage() {
                             onCheckedChange={(checked) =>
                               handleToggle(record.studentId, checked === true)
                             }
+                            aria-label={`Presence pour ${record.studentName}`}
                             data-testid={`checkbox-attendance-${record.studentId}`}
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={20}
+                            className="h-8 w-20 text-center"
+                            value={getNoteValue(record.studentId, record.note)}
+                            onChange={(e) => handleNoteChange(record.studentId, e.target.value)}
+                            placeholder="0-20"
+                            aria-label={`Note pour ${record.studentName}`}
+                            data-testid={`input-note-${record.studentId}`}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            className="h-8"
+                            value={getCommentValue(record.studentId, record.comment)}
+                            onChange={(e) => handleCommentChange(record.studentId, e.target.value)}
+                            placeholder="Observation..."
+                            aria-label={`Commentaire pour ${record.studentName}`}
+                            data-testid={`input-comment-${record.studentId}`}
                           />
                         </TableCell>
                       </TableRow>

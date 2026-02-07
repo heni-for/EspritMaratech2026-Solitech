@@ -44,25 +44,23 @@ import {
   GraduationCap,
   ArrowRight,
 } from "lucide-react";
-import type { Student } from "@shared/schema";
-
 interface UserData {
   id: string;
   username: string;
   fullName: string;
   role: string;
-  studentId: number | null;
+  studentId: string | null;
 }
 
 interface TrainerAssignment {
-  id: number;
+  id: string;
   userId: string;
-  trainingId: number;
+  trainingId: string;
   trainingName: string;
 }
 
 interface TrainingData {
-  id: number;
+  id: string;
   name: string;
   description: string | null;
   status: string;
@@ -140,7 +138,7 @@ export default function UserManagement() {
   });
 
   const assignTrainingMutation = useMutation({
-    mutationFn: async ({ userId, trainingId }: { userId: string; trainingId: number }) => {
+    mutationFn: async ({ userId, trainingId }: { userId: string; trainingId: string }) => {
       const res = await apiRequest("POST", "/api/trainer-assignments", { userId, trainingId });
       return res.json();
     },
@@ -155,7 +153,7 @@ export default function UserManagement() {
   });
 
   const removeAssignmentMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/trainer-assignments/${id}`);
     },
     onSuccess: () => {
@@ -345,16 +343,17 @@ export default function UserManagement() {
                         <BookOpen className="h-4 w-4 mr-1.5" />
                         Formations
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        data-testid={`button-delete-trainer-${trainer.id}`}
-                        onClick={() => {
-                          if (confirm("Supprimer cet encadrant ?")) {
-                            deleteUserMutation.mutate(trainer.id);
-                          }
-                        }}
-                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          data-testid={`button-delete-trainer-${trainer.id}`}
+                          data-icon-label={`Supprimer ${trainer.fullName}`}
+                          onClick={() => {
+                            if (confirm("Supprimer cet encadrant ?")) {
+                              deleteUserMutation.mutate(trainer.id);
+                            }
+                          }}
+                        >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -425,12 +424,13 @@ export default function UserManagement() {
                         <BookOpen className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm">{a.trainingName}</span>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeAssignmentMutation.mutate(a.id)}
-                        data-testid={`button-remove-assignment-${a.id}`}
-                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeAssignmentMutation.mutate(a.id)}
+                          data-icon-label={`Retirer la formation ${a.trainingName}`}
+                          data-testid={`button-remove-assignment-${a.id}`}
+                        >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -463,7 +463,7 @@ export default function UserManagement() {
                       if (selectedTrainer && assignTrainingId) {
                         assignTrainingMutation.mutate({
                           userId: selectedTrainer.id,
-                          trainingId: parseInt(assignTrainingId),
+                          trainingId: assignTrainingId,
                         });
                       }
                     }}

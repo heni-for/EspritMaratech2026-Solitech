@@ -48,10 +48,22 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    const anyProps = props as React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      "data-icon-label"?: string
+    }
+    const resolvedAriaLabel =
+      anyProps["aria-label"] ??
+      (anyProps["data-icon-label"] &&
+      (typeof document !== "undefined"
+        ? document.documentElement.getAttribute("data-a11y-labels") !== "off"
+        : true)
+        ? anyProps["data-icon-label"]
+        : undefined)
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        aria-label={resolvedAriaLabel}
         {...props}
       />
     )

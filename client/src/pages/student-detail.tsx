@@ -6,18 +6,33 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Mail, Phone, Calendar, User, BookOpen, CheckCircle2, XCircle } from "lucide-react";
-import type { Student, Enrollment, Training, Attendance } from "@shared/schema";
-
 interface StudentDetail {
-  student: Student;
+  student: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    phone?: string | null;
+    dateOfBirth?: string | null;
+    guardianName?: string | null;
+    guardianPhone?: string | null;
+  };
   enrollments: Array<{
-    enrollment: Enrollment;
-    training: Training;
+    enrollment: { id: string };
+    training: { id: string; name: string };
     totalSessions: number;
     attendedSessions: number;
     levelsCompleted: number;
     totalLevels: number;
     eligible: boolean;
+    formationStatus: "in_progress" | "completed" | "failed";
+    late: boolean;
+    levelStatuses: Array<{
+      levelId: string;
+      levelNumber: number;
+      name: string;
+      status: "in_progress" | "passed" | "failed";
+    }>;
   }>;
   attendanceHistory: Array<{
     sessionTitle: string;
@@ -25,6 +40,15 @@ interface StudentDetail {
     levelName: string;
     date: string;
     present: boolean;
+    note?: number | null;
+    comment?: string | null;
+  }>;
+  certificates: Array<{
+    id: string;
+    trainingId: string;
+    trainingName?: string | null;
+    issuedAt?: string | null;
+    certificateNumber?: string | null;
   }>;
 }
 
@@ -68,11 +92,16 @@ export default function StudentDetailPage() {
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center gap-3">
-        <Link href="/students">
-          <Button size="icon" variant="ghost" data-testid="button-back">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
+          <Link href="/students">
+            <Button
+              size="icon"
+              variant="ghost"
+              data-icon-label="Retour a la liste des eleves"
+              data-testid="button-back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-student-name">
             {student.firstName} {student.lastName}
@@ -144,7 +173,11 @@ export default function StudentDetailPage() {
                           <Badge variant="secondary" className="text-xs">
                             Level {e.levelsCompleted}/{e.totalLevels}
                           </Badge>
-                          {e.eligible ? (
+                          {e.formationStatus === "failed" ? (
+                            <Badge variant="destructive" className="text-xs">
+                              Echoue
+                            </Badge>
+                          ) : e.eligible ? (
                             <Badge variant="default" className="text-xs">
                               <CheckCircle2 className="h-3 w-3 mr-1" />
                               Eligible
@@ -152,6 +185,11 @@ export default function StudentDetailPage() {
                           ) : (
                             <Badge variant="outline" className="text-xs">
                               In Progress
+                            </Badge>
+                          )}
+                          {e.late && (
+                            <Badge variant="secondary" className="text-xs">
+                              En retard
                             </Badge>
                           )}
                         </div>
@@ -164,6 +202,19 @@ export default function StudentDetailPage() {
                           {e.attendedSessions}/{e.totalSessions} sessions
                         </span>
                       </div>
+                      {e.levelStatuses.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {e.levelStatuses.map((lvl) => (
+                            <Badge
+                              key={lvl.levelId}
+                              variant={lvl.status === "passed" ? "default" : lvl.status === "failed" ? "destructive" : "outline"}
+                              className="text-xs"
+                            >
+                              Niveau {lvl.levelNumber}: {lvl.status === "passed" ? "Valide" : lvl.status === "failed" ? "Echoue" : "En cours"}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -207,10 +258,40 @@ export default function StudentDetailPage() {
                     {record.date && (
                       <span className="text-xs text-muted-foreground">{record.date}</span>
                     )}
+                    {record.note !== null && record.note !== undefined && (
+                      <Badge variant="outline" className="text-xs">
+                        Note: {record.note}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Certificates</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.certificates?.length ? (
+            <div className="space-y-2">
+              {data.certificates.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-2 border-b last:border-b-0 py-2">
+                  <span className="text-sm font-medium">Formation: {c.trainingName || c.trainingId}</span>
+                  <div className="flex items-center gap-2">
+                    {c.certificateNumber && (
+                      <Badge variant="secondary" className="text-xs">{c.certificateNumber}</Badge>
+                    )}
+                    {c.issuedAt && <span className="text-xs text-muted-foreground">{c.issuedAt}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No certificates yet</p>
           )}
         </CardContent>
       </Card>

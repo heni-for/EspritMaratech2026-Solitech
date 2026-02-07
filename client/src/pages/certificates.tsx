@@ -21,12 +21,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Award, Printer, Download, Eye, CheckCircle2 } from "lucide-react";
-import type { Certificate, Student, Training } from "@shared/schema";
-
 interface EligibleStudent {
-  studentId: number;
+  studentId: string;
   studentName: string;
-  trainingId: number;
+  trainingId: string;
   trainingName: string;
   completedLevels: number;
   totalLevels: number;
@@ -34,7 +32,12 @@ interface EligibleStudent {
   certificateNumber?: string;
 }
 
-interface CertificateWithDetails extends Certificate {
+interface CertificateWithDetails {
+  id: string;
+  studentId: string;
+  trainingId: string;
+  issuedAt: string;
+  certificateNumber: string;
   studentName: string;
   trainingName: string;
 }
@@ -59,7 +62,7 @@ export default function CertificatesPage() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: async ({ studentId, trainingId }: { studentId: number; trainingId: number }) => {
+    mutationFn: async ({ studentId, trainingId }: { studentId: string; trainingId: string }) => {
       const res = await apiRequest("POST", "/api/certificates", { studentId, trainingId });
       return res.json();
     },
@@ -133,7 +136,7 @@ export default function CertificatesPage() {
               <Award className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="font-medium">Aucun eleve eligible</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Les eleves doivent completer les 4 niveaux pour etre eligibles
+                Les eleves doivent completer tous les niveaux pour etre eligibles
               </p>
             </div>
           ) : (
@@ -234,19 +237,20 @@ export default function CertificatesPage() {
                       {cert.issuedAt}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() =>
-                          handlePreview({
-                            studentName: cert.studentName,
-                            trainingName: cert.trainingName,
-                            certificateNumber: cert.certificateNumber,
-                            issuedAt: cert.issuedAt,
-                          })
-                        }
-                        data-testid={`button-view-cert-${cert.id}`}
-                      >
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() =>
+                            handlePreview({
+                              studentName: cert.studentName,
+                              trainingName: cert.trainingName,
+                              certificateNumber: cert.certificateNumber,
+                              issuedAt: cert.issuedAt,
+                            })
+                          }
+                          data-icon-label={`Previsualiser le certificat de ${cert.studentName}`}
+                          data-testid={`button-view-cert-${cert.id}`}
+                        >
                         <Eye className="h-4 w-4" />
                       </Button>
                     </TableCell>

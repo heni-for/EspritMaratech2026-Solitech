@@ -15,18 +15,47 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ArrowLeft, BookOpen, Users, Layers, CheckCircle2 } from "lucide-react";
-import type { Training, Level, Session, Student, Enrollment } from "@shared/schema";
-
 interface TrainingDetail {
-  training: Training;
-  levels: Array<Level & { sessions: Session[] }>;
+  training: {
+    id: string;
+    name: string;
+    description?: string | null;
+    status: string;
+  };
+  levels: Array<{
+    id: string;
+    trainingId: string;
+    levelNumber: number;
+    name: string;
+    sessions: Array<{
+      id: string;
+      levelId: string;
+      sessionNumber: number;
+      title: string;
+      date?: string | null;
+    }>;
+  }>;
   enrolledStudents: Array<{
-    student: Student;
-    enrollment: Enrollment;
+    student: {
+      id: string;
+      firstName: string;
+      lastName: string;
+    };
+    enrollment: {
+      id: string;
+    };
     attendedSessions: number;
     totalSessions: number;
     levelsCompleted: number;
     eligible: boolean;
+    formationStatus: "in_progress" | "completed" | "failed";
+    late: boolean;
+    levelStatuses: Array<{
+      levelId: string;
+      levelNumber: number;
+      name: string;
+      status: "in_progress" | "passed" | "failed";
+    }>;
   }>;
 }
 
@@ -67,11 +96,16 @@ export default function TrainingDetailPage() {
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center gap-3">
-        <Link href="/trainings">
-          <Button size="icon" variant="ghost" data-testid="button-back">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
+          <Link href="/trainings">
+            <Button
+              size="icon"
+              variant="ghost"
+              data-icon-label="Retour a la liste des formations"
+              data-testid="button-back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight" data-testid="text-training-name">
@@ -185,7 +219,11 @@ export default function TrainingDetailPage() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            {es.eligible ? (
+                            {es.formationStatus === "failed" ? (
+                              <Badge variant="destructive" className="text-xs">
+                                Echoue
+                              </Badge>
+                            ) : es.eligible ? (
                               <Badge variant="default" className="text-xs">
                                 <CheckCircle2 className="h-3 w-3 mr-1" />
                                 Eligible
@@ -193,6 +231,11 @@ export default function TrainingDetailPage() {
                             ) : (
                               <Badge variant="outline" className="text-xs">
                                 En cours
+                              </Badge>
+                            )}
+                            {es.late && (
+                              <Badge variant="secondary" className="text-xs ml-2">
+                                En retard
                               </Badge>
                             )}
                           </TableCell>

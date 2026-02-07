@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: asset-manager-db
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: asset_manager
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - asset-manager-network
+    healthcheck:
+      test: ["CMD", "mongosh", "localhost:27017/admin", "--eval", "db.runCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: asset-manager-app
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: mongodb://admin:admin123@mongodb:27017/asset_manager?authSource=admin
+      SESSION_SECRET: your-secret-key-change-in-production
+    env_file:
+      - .env
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    networks:
+      - asset-manager-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/auth/me', (r) => {if (r.statusCode !== 401) throw new Error(r.statusCode)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: asset-manager-mail
+    ports:
+      - "8025:8025"
+    networks:
+      - asset-manager-network
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+
+networks:
+  asset-manager-network:
+    driver: bridge

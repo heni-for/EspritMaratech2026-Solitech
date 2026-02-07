@@ -2,6 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --astba-font-scale: 1;
+}
+
+html {
+  font-size: calc(16px * var(--astba-font-scale));
+}
+
+html[data-high-contrast] {
+  filter: contrast(1.15);
+}
+
+html[data-reduce-motion] *,
+html[data-reduce-motion] *::before,
+html[data-reduce-motion] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+html[data-strong-focus] :focus-visible {
+  outline: 3px solid hsl(210 90% 45%);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 16px;
+  padding: 8px 12px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  z-index: 1000;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);

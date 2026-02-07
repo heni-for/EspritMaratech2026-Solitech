@@ -1,8 +1,91 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage, storageType } from "./storage";
 import { insertStudentSchema, insertTrainingSchema, insertEnrollmentSchema } from "@shared/schema";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
+
+const asStorageId = (value: string | number) => {
+  if (storageType === "mongo") return value.toString();
+  const num = typeof value === "number" ? value : Number.parseInt(value, 10);
+  return Number.isNaN(num) ? value : num;
+};
+
+async function buildTrainingProgress(trainingId: any, studentId: any) {
+  const trainingLevels = await storage.getLevelsByTraining(trainingId);
+  let totalSessions = 0;
+  let attendedSessions = 0;
+  let levelsCompleted = 0;
+  let absentCount = 0;
+  let anyFailed = false;
+  let allFinalized = true;
+
+  const levelStatuses = [];
+
+  for (const level of trainingLevels) {
+    const levelSessions = await storage.getSessionsByLevel(level.id);
+    totalSessions += levelSessions.length;
+
+    let levelMarked = 0;
+    let levelPresent = 0;
+
+    for (const session of levelSessions) {
+      const records = await storage.getAttendanceBySession(session.id);
+      const studentRecord = records.find((a: any) => a.studentId === studentId);
+      if (studentRecord) {
+        levelMarked++;
+        if (studentRecord.present) {
+          levelPresent++;
+          attendedSessions++;
+        } else {
+          absentCount++;
+        }
+      }
+    }
+
+    let status: "in_progress" | "passed" | "failed" = "in_progress";
+    if (levelSessions.length > 0 && levelMarked === levelSessions.length) {
+      status = levelPresent === levelSessions.length ? "passed" : "failed";
+    } else {
+      allFinalized = false;
+    }
+
+    if (status === "passed") levelsCompleted++;
+    if (status === "failed") anyFailed = true;
+
+    levelStatuses.push({
+      levelId: level.id,
+      levelNumber: level.levelNumber,
+      name: level.name,
+      totalSessions: levelSessions.length,
+      attendedSessions: levelPresent,
+      status,
+    });
+  }
+
+  let formationStatus: "in_progress" | "completed" | "failed" = "in_progress";
+  if (trainingLevels.length > 0 && levelsCompleted === trainingLevels.length) {
+    formationStatus = "completed";
+  } else if (anyFailed && allFinalized) {
+    formationStatus = "failed";
+  }
+
+  const eligible = formationStatus === "completed";
+  const late = absentCount >= 5;
+
+  return {
+    totalSessions,
+    attendedSessions,
+    levelsCompleted,
+    absentCount,
+    totalLevels: trainingLevels.length,
+    eligible,
+    late,
+    formationStatus,
+    levelStatuses,
+  };
+}
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
@@ -22,6 +105,44 @@ function requireRole(...roles: string[]) {
     next();
   };
 }
+
+const escapeXml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+
+const mapGoogleEncoding = (contentType: string) => {
+  const normalized = contentType.toLowerCase();
+  if (normalized.includes("ogg")) return "OGG_OPUS";
+  if (normalized.includes("webm")) return "WEBM_OPUS";
+  if (normalized.includes("wav")) return "LINEAR16";
+  if (normalized.includes("mpeg") || normalized.includes("mp3")) return "MP3";
+  return null;
+};
+
+const generatePassword = (length = 8) => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = crypto.randomBytes(length);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+};
+
+const getMailer = () => {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) return null;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secure = String(process.env.SMTP_SECURE || "false").toLowerCase() === "true";
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+  });
+};
 
 export async function registerRoutes(
   httpServer: Server,
@@ -154,6 +275,174 @@ export async function registerRoutes(
     res.json({ message: "User deleted" });
   });
 
+  // Speech (TTS / STT)
+  app.post("/api/speech/tts", requireAuth, async (req, res) => {
+    const { provider, text, language, voice } = req.body as {
+      provider?: "azure" | "google";
+      text?: string;
+      language?: string;
+      voice?: string;
+    };
+
+    if (!provider || !text) {
+      return res.status(400).json({ message: "provider and text are required" });
+    }
+
+    if (provider === "azure") {
+      const key = process.env.AZURE_SPEECH_KEY;
+      const region = process.env.AZURE_SPEECH_REGION;
+      if (!key || !region) {
+        return res.status(400).json({ message: "Azure Speech not configured" });
+      }
+
+      const lang = language || "fr-FR";
+      const voiceName = voice || "fr-FR-DeniseNeural";
+      const ssml = `<speak version='1.0' xml:lang='${lang}'><voice xml:lang='${lang}' name='${voiceName}'>${escapeXml(
+        text
+      )}</voice></speak>`;
+
+      const ttsRes = await fetch(
+        `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`,
+        {
+          method: "POST",
+          headers: {
+            "Ocp-Apim-Subscription-Key": key,
+            "Content-Type": "application/ssml+xml",
+            "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3",
+          },
+          body: ssml,
+        }
+      );
+
+      if (!ttsRes.ok) {
+        const errText = await ttsRes.text();
+        return res.status(500).json({ message: errText || "Azure TTS failed" });
+      }
+
+      const audioBuffer = Buffer.from(await ttsRes.arrayBuffer());
+      return res.json({ audioBase64: audioBuffer.toString("base64"), contentType: "audio/mpeg" });
+    }
+
+    if (provider === "google") {
+      const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({ message: "Google Speech not configured" });
+      }
+
+      const lang = language || "fr-FR";
+      const voiceName = voice || "fr-FR-Wavenet-D";
+      const ttsRes = await fetch(
+        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            input: { text },
+            voice: { languageCode: lang, name: voiceName },
+            audioConfig: { audioEncoding: "MP3" },
+          }),
+        }
+      );
+
+      if (!ttsRes.ok) {
+        const errText = await ttsRes.text();
+        return res.status(500).json({ message: errText || "Google TTS failed" });
+      }
+
+      const payload = await ttsRes.json();
+      if (!payload.audioContent) {
+        return res.status(500).json({ message: "Google TTS returned no audio" });
+      }
+
+      return res.json({ audioBase64: payload.audioContent, contentType: "audio/mpeg" });
+    }
+
+    return res.status(400).json({ message: "Unsupported provider" });
+  });
+
+  app.post("/api/speech/stt", requireAuth, async (req, res) => {
+    const { provider, audioBase64, contentType, language } = req.body as {
+      provider?: "azure" | "google";
+      audioBase64?: string;
+      contentType?: string;
+      language?: string;
+    };
+
+    if (!provider || !audioBase64 || !contentType) {
+      return res.status(400).json({ message: "provider, audioBase64 and contentType are required" });
+    }
+
+    if (provider === "azure") {
+      const key = process.env.AZURE_SPEECH_KEY;
+      const region = process.env.AZURE_SPEECH_REGION;
+      if (!key || !region) {
+        return res.status(400).json({ message: "Azure Speech not configured" });
+      }
+
+      const lang = language || "fr-FR";
+      const sttRes = await fetch(
+        `https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=${encodeURIComponent(
+          lang
+        )}`,
+        {
+          method: "POST",
+          headers: {
+            "Ocp-Apim-Subscription-Key": key,
+            "Content-Type": contentType,
+          },
+          body: Buffer.from(audioBase64, "base64"),
+        }
+      );
+
+      if (!sttRes.ok) {
+        const errText = await sttRes.text();
+        return res.status(500).json({ message: errText || "Azure STT failed" });
+      }
+
+      const payload = await sttRes.json();
+      return res.json({ transcript: payload.DisplayText || "" });
+    }
+
+    if (provider === "google") {
+      const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({ message: "Google Speech not configured" });
+      }
+
+      const lang = language || "fr-FR";
+      const encoding = mapGoogleEncoding(contentType || "");
+      if (!encoding) {
+        return res.status(400).json({ message: "Unsupported audio content type" });
+      }
+
+      const sttRes = await fetch(
+        `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            config: {
+              encoding,
+              languageCode: lang,
+            },
+            audio: { content: audioBase64 },
+          }),
+        }
+      );
+
+      if (!sttRes.ok) {
+        const errText = await sttRes.text();
+        return res.status(500).json({ message: errText || "Google STT failed" });
+      }
+
+      const payload = await sttRes.json();
+      const transcript = payload.results?.[0]?.alternatives?.[0]?.transcript || "";
+      return res.json({ transcript });
+    }
+
+    return res.status(400).json({ message: "Unsupported provider" });
+  });
+
   // ─── Trainer Assignments (Admin only) ───
   app.get("/api/trainer-assignments", requireRole("admin"), async (_req, res) => {
     const allAssignments = await storage.getAllTrainerAssignments();
@@ -182,12 +471,15 @@ export async function registerRoutes(
     if (!userId || !trainingId) {
       return res.status(400).json({ message: "userId and trainingId are required" });
     }
-    const assignment = await storage.createTrainerAssignment({ userId, trainingId });
+    const assignment = await storage.createTrainerAssignment({
+      userId: asStorageId(userId),
+      trainingId: asStorageId(trainingId),
+    });
     res.status(201).json(assignment);
   });
 
   app.delete("/api/trainer-assignments/:id", requireRole("admin"), async (req, res) => {
-    await storage.deleteTrainerAssignment(parseInt(req.params.id));
+    await storage.deleteTrainerAssignment(asStorageId(req.params.id));
     res.json({ message: "Assignment removed" });
   });
 
@@ -198,7 +490,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/students/:id", requireAuth, async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = asStorageId(req.params.id);
 
     if (req.session.role === "student") {
       const user = await storage.getUser(req.session.userId!);
@@ -217,42 +509,12 @@ export async function registerRoutes(
       const training = await storage.getTraining(enrollment.trainingId);
       if (!training) continue;
 
-      const trainingLevels = await storage.getLevelsByTraining(training.id);
-      let totalSessions = 0;
-      let attendedSessions = 0;
-      let levelsCompleted = 0;
-
-      for (const level of trainingLevels) {
-        const levelSessions = await storage.getSessionsByLevel(level.id);
-        totalSessions += levelSessions.length;
-
-        let allAttended = true;
-        for (const session of levelSessions) {
-          const attendanceRecords = await storage.getAttendanceBySession(session.id);
-          const studentAttendance = attendanceRecords.find(
-            (a) => a.studentId === id && a.present
-          );
-          if (studentAttendance) {
-            attendedSessions++;
-          } else {
-            allAttended = false;
-          }
-        }
-        if (allAttended && levelSessions.length > 0) {
-          levelsCompleted++;
-        }
-      }
-
-      const eligible = levelsCompleted >= 4;
+      const progress = await buildTrainingProgress(training.id, id);
 
       enrichedEnrollments.push({
         enrollment,
         training,
-        totalSessions,
-        attendedSessions,
-        levelsCompleted,
-        totalLevels: 4,
-        eligible,
+        ...progress,
       });
     }
 
@@ -278,17 +540,77 @@ export async function registerRoutes(
         levelName: level?.name || "Unknown",
         date: record.markedAt || "",
         present: record.present,
+        note: record.note ?? null,
+        comment: record.comment ?? null,
       });
     }
 
-    res.json({ student, enrollments: enrichedEnrollments, attendanceHistory });
+    const certificates = await storage.getCertificatesByStudent(id);
+    const enrichedCerts = await Promise.all(
+      certificates.map(async (c: any) => {
+        const t = await storage.getTraining(c.trainingId);
+        return { ...c, issuedAt: c.issuedAt || c.issuedDate, trainingName: t?.name || "Unknown" };
+      })
+    );
+
+    res.json({ student, enrollments: enrichedEnrollments, attendanceHistory, certificates: enrichedCerts });
   });
 
   app.post("/api/students", requireRole("admin"), async (req, res) => {
     const parsed = insertStudentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const email = parsed.data.email?.trim();
+    if (email) {
+      const existingUser = await storage.getUserByUsername(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "Un utilisateur avec cet email existe deja" });
+      }
+    }
+
     const student = await storage.createStudent(parsed.data);
-    res.status(201).json(student);
+
+    let emailSent = false;
+    if (email) {
+      const plainPassword = generatePassword(8);
+      const hashed = await bcrypt.hash(plainPassword, 10);
+      await storage.createUser({
+        username: email,
+        password: hashed,
+        fullName: `${student.firstName} ${student.lastName}`,
+        role: "student",
+        studentId: student.id,
+      });
+
+      const mailer = getMailer();
+      if (mailer) {
+        const from = process.env.SMTP_FROM || "no-reply@astba.local";
+        const appName = process.env.APP_NAME || "ASTBA";
+        try {
+          await mailer.sendMail({
+            from,
+            to: email,
+            subject: `${appName} - Vos identifiants`,
+            text: `Bonjour ${student.firstName},\n\nVotre compte ${appName} a ete cree.\nIdentifiant: ${email}\nMot de passe: ${plainPassword}\n\nConnectez-vous et changez votre mot de passe des que possible.`,
+          });
+          emailSent = true;
+          console.log(`Email sent to ${email}`);
+        } catch (err) {
+          console.error("SMTP send failed:", err);
+        }
+      } else {
+        console.log("SMTP not configured. Email not sent.");
+      }
+    }
+
+    res.status(201).json({ ...student, emailSent });
+  });
+
+  app.delete("/api/students/:id", requireRole("admin"), async (req, res) => {
+    const id = asStorageId(req.params.id);
+    const student = await storage.getStudent(id);
+    if (!student) return res.status(404).json({ message: "Student not found" });
+    await storage.deleteStudent(id);
+    res.json({ message: "Student deleted" });
   });
 
   // ─── Trainings ───
@@ -320,7 +642,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/trainings/:id", requireAuth, async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = asStorageId(req.params.id);
     const training = await storage.getTraining(id);
     if (!training) return res.status(404).json({ message: "Training not found" });
 
@@ -345,33 +667,12 @@ export async function registerRoutes(
         const student = await storage.getStudent(enrollment.studentId);
         if (!student) return null;
 
-        let attendedSessions = 0;
-        let totalSessions = 0;
-        let levelsCompleted = 0;
-
-        for (const level of trainingLevels) {
-          const levelSessions = await storage.getSessionsByLevel(level.id);
-          totalSessions += levelSessions.length;
-          let allAttended = true;
-
-          for (const session of levelSessions) {
-            const records = await storage.getAttendanceBySession(session.id);
-            const studentRecord = records.find(
-              (a) => a.studentId === enrollment.studentId && a.present
-            );
-            if (studentRecord) attendedSessions++;
-            else allAttended = false;
-          }
-          if (allAttended && levelSessions.length > 0) levelsCompleted++;
-        }
+        const progress = await buildTrainingProgress(training.id, enrollment.studentId);
 
         return {
           student,
           enrollment,
-          attendedSessions,
-          totalSessions,
-          levelsCompleted,
-          eligible: levelsCompleted >= 4,
+          ...progress,
         };
       })
     );
@@ -384,19 +685,22 @@ export async function registerRoutes(
   });
 
   app.post("/api/trainings", requireRole("admin"), async (req, res) => {
-    const { trainerIds, ...trainingData } = req.body;
+    const { trainerIds, studentIds, levelsCount, sessionsPerLevel, ...trainingData } = req.body;
     const parsed = insertTrainingSchema.safeParse(trainingData);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
 
     const training = await storage.createTraining(parsed.data);
 
-    for (let i = 1; i <= 4; i++) {
+    const levelsTotal = Number.isFinite(Number(levelsCount)) ? Math.max(1, Number(levelsCount)) : 4;
+    const sessionsTotal = Number.isFinite(Number(sessionsPerLevel)) ? Math.max(1, Number(sessionsPerLevel)) : 6;
+
+    for (let i = 1; i <= levelsTotal; i++) {
       const level = await storage.createLevel({
         trainingId: training.id,
         levelNumber: i,
         name: `Niveau ${i}`,
       });
-      for (let j = 1; j <= 6; j++) {
+      for (let j = 1; j <= sessionsTotal; j++) {
         await storage.createSession({
           levelId: level.id,
           sessionNumber: j,
@@ -408,9 +712,18 @@ export async function registerRoutes(
 
     if (Array.isArray(trainerIds)) {
       for (const userId of trainerIds) {
-        if (typeof userId === "number") {
-          await storage.createTrainerAssignment({ userId, trainingId: training.id });
-        }
+        await storage.createTrainerAssignment({ userId: asStorageId(userId), trainingId: asStorageId(training.id) });
+      }
+    }
+
+    if (Array.isArray(studentIds)) {
+      for (const studentId of studentIds) {
+        await storage.createEnrollment({
+          studentId: asStorageId(studentId),
+          trainingId: asStorageId(training.id),
+          currentLevel: 1,
+          enrolled: true,
+        });
       }
     }
 
@@ -420,24 +733,24 @@ export async function registerRoutes(
   // ─── Enrollments ───
   app.post("/api/enrollments", requireRole("admin"), async (req, res) => {
     const { studentId, trainingId } = req.body;
-    if (!studentId || !trainingId || typeof studentId !== "number" || typeof trainingId !== "number") {
+    if (!studentId || !trainingId) {
       return res.status(400).json({ message: "Valid studentId and trainingId are required" });
     }
 
-    const student = await storage.getStudent(studentId);
+    const student = await storage.getStudent(asStorageId(studentId));
     if (!student) return res.status(404).json({ message: "Student not found" });
 
-    const training = await storage.getTraining(trainingId);
+    const training = await storage.getTraining(asStorageId(trainingId));
     if (!training) return res.status(404).json({ message: "Training not found" });
 
-    const existing = await storage.getEnrollment(studentId, trainingId);
+    const existing = await storage.getEnrollment(asStorageId(studentId), asStorageId(trainingId));
     if (existing) {
       return res.status(400).json({ message: "Student is already enrolled in this training" });
     }
 
     const enrollment = await storage.createEnrollment({
-      studentId,
-      trainingId,
+      studentId: asStorageId(studentId),
+      trainingId: asStorageId(trainingId),
       currentLevel: 1,
       enrolled: true,
     });
@@ -481,7 +794,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/attendance/:sessionId", requireRole("admin", "trainer"), async (req, res) => {
-    const sessionId = parseInt(req.params.sessionId);
+    const sessionId = asStorageId(req.params.sessionId);
     const session = await storage.getSession(sessionId);
     if (!session) return res.status(404).json({ message: "Session not found" });
 
@@ -512,6 +825,8 @@ export async function registerRoutes(
           studentId: enrollment.studentId,
           studentName: student ? `${student.firstName} ${student.lastName}` : "Unknown",
           present: attendanceRecord?.present ?? false,
+          note: attendanceRecord?.note ?? null,
+          comment: attendanceRecord?.comment ?? null,
         };
       })
     );
@@ -535,7 +850,7 @@ export async function registerRoutes(
       const flatLevels = allLevels.flat();
 
       for (const record of records) {
-        const session = await storage.getSession(record.sessionId);
+        const session = await storage.getSession(asStorageId(record.sessionId));
         if (!session) continue;
         const level = flatLevels.find((l) => l.id === session.levelId);
         if (!level || !assignedTrainingIds.has(level.trainingId)) {
@@ -546,15 +861,49 @@ export async function registerRoutes(
 
     const now = new Date().toISOString();
     const results = await Promise.all(
-      records.map((r: { studentId: number; sessionId: number; present: boolean }) =>
+      records.map((r: { studentId: any; sessionId: any; present: boolean; note?: number | null; comment?: string | null }) =>
         storage.upsertAttendance({
-          studentId: r.studentId,
-          sessionId: r.sessionId,
+          studentId: asStorageId(r.studentId),
+          sessionId: asStorageId(r.sessionId),
           present: r.present,
+          note: r.note ?? null,
+          comment: r.comment ?? null,
           markedAt: now,
         })
       )
     );
+
+    const trainings = await storage.getTrainings();
+    const allLevels = (await Promise.all(
+      trainings.map((t: any) => storage.getLevelsByTraining(t.id))
+    )).flat();
+
+    const pairs = new Map<string, { studentId: any; trainingId: any }>();
+    for (const record of records) {
+      const session = await storage.getSession(asStorageId(record.sessionId));
+      if (!session) continue;
+      const level = allLevels.find((l: any) => l.id === session.levelId);
+      if (!level) continue;
+      const key = `${record.studentId}-${level.trainingId}`;
+      pairs.set(key, { studentId: asStorageId(record.studentId), trainingId: level.trainingId });
+    }
+
+    for (const pair of pairs.values()) {
+      const progress = await buildTrainingProgress(pair.trainingId, pair.studentId);
+      if (progress.formationStatus === "completed") {
+        const existingCert = await storage.getCertificate(pair.studentId, pair.trainingId);
+        if (!existingCert) {
+          const nowDate = new Date();
+          const certificateNumber = `ASTBA-${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}${String(nowDate.getDate()).padStart(2, "0")}-${String(pair.studentId).slice(-3)}${String(pair.trainingId).slice(-3)}`;
+          await storage.createCertificate({
+            studentId: pair.studentId,
+            trainingId: pair.trainingId,
+            issuedAt: nowDate.toISOString().split("T")[0],
+            certificateNumber,
+          });
+        }
+      }
+    }
 
     res.json(results);
   });
@@ -568,6 +917,7 @@ export async function registerRoutes(
         const training = await storage.getTraining(cert.trainingId);
         return {
           ...cert,
+          issuedAt: cert.issuedAt || cert.issuedDate,
           studentName: student ? `${student.firstName} ${student.lastName}` : "Unknown",
           trainingName: training?.name || "Unknown",
         };
@@ -585,31 +935,14 @@ export async function registerRoutes(
       const trainingLevels = await storage.getLevelsByTraining(training.id);
 
       for (const enrollment of trainingEnrollments) {
-        let levelsCompleted = 0;
+      const progress = await buildTrainingProgress(training.id, enrollment.studentId);
 
-        for (const level of trainingLevels) {
-          const levelSessions = await storage.getSessionsByLevel(level.id);
-          let allPresent = levelSessions.length > 0;
-
-          for (const session of levelSessions) {
-            const records = await storage.getAttendanceBySession(session.id);
-            const studentRecord = records.find(
-              (a) => a.studentId === enrollment.studentId && a.present
-            );
-            if (!studentRecord) {
-              allPresent = false;
-              break;
-            }
-          }
-          if (allPresent) levelsCompleted++;
-        }
-
-        if (levelsCompleted >= 4) {
-          const student = await storage.getStudent(enrollment.studentId);
-          const existingCert = await storage.getCertificate(
-            enrollment.studentId,
-            training.id
-          );
+      if (progress.formationStatus === "completed") {
+        const student = await storage.getStudent(enrollment.studentId);
+        const existingCert = await storage.getCertificate(
+          enrollment.studentId,
+          training.id
+        );
 
           eligibleStudents.push({
             studentId: enrollment.studentId,
@@ -618,13 +951,13 @@ export async function registerRoutes(
               : "Unknown",
             trainingId: training.id,
             trainingName: training.name,
-            completedLevels: levelsCompleted,
-            totalLevels: 4,
-            alreadyCertified: !!existingCert,
-            certificateNumber: existingCert?.certificateNumber,
-          });
-        }
+          completedLevels: progress.levelsCompleted,
+          totalLevels: progress.totalLevels,
+          alreadyCertified: !!existingCert,
+          certificateNumber: existingCert?.certificateNumber,
+        });
       }
+    }
     }
 
     res.json(eligibleStudents);
@@ -647,21 +980,10 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Certificate already issued" });
     }
 
-    const trainingLevels = await storage.getLevelsByTraining(trainingId);
-    let levelsCompleted = 0;
-    for (const level of trainingLevels) {
-      const levelSessions = await storage.getSessionsByLevel(level.id);
-      let allPresent = levelSessions.length > 0;
-      for (const session of levelSessions) {
-        const records = await storage.getAttendanceBySession(session.id);
-        const studentRecord = records.find((a) => a.studentId === studentId && a.present);
-        if (!studentRecord) { allPresent = false; break; }
-      }
-      if (allPresent) levelsCompleted++;
-    }
+    const progress = await buildTrainingProgress(trainingId, studentId);
 
-    if (levelsCompleted < 4) {
-      return res.status(400).json({ message: "Student has not completed all 4 levels" });
+    if (progress.formationStatus !== "completed") {
+      return res.status(400).json({ message: "Student has not completed all levels" });
     }
 
     const now = new Date();
@@ -687,79 +1009,81 @@ export async function registerRoutes(
     if (!student) return res.status(404).json({ message: "Student not found" });
 
     const myEnrollments = await storage.getEnrollmentsByStudent(user.studentId);
+    const trainingIds = Array.from(new Set(myEnrollments.map((e: any) => e.trainingId)));
+    const trainerNameByTrainingId = new Map<any, string>();
+    await Promise.all(
+      trainingIds.map(async (trainingId: any) => {
+        const assignments = await storage.getTrainerAssignmentsByTraining(trainingId);
+        if (assignments && assignments.length > 0) {
+          const trainer = await storage.getUser(assignments[0].userId);
+          trainerNameByTrainingId.set(trainingId, trainer?.fullName || "Encadrant");
+        } else {
+          trainerNameByTrainingId.set(trainingId, "Encadrant");
+        }
+      })
+    );
     const formations = [];
 
     for (const enrollment of myEnrollments) {
       const training = await storage.getTraining(enrollment.trainingId);
       if (!training) continue;
 
-      const trainingLevels = await storage.getLevelsByTraining(training.id);
-      let totalSessions = 0;
-      let attendedSessions = 0;
-      let levelsCompleted = 0;
-
-      for (const level of trainingLevels) {
-        const levelSessions = await storage.getSessionsByLevel(level.id);
-        totalSessions += levelSessions.length;
-        let allAttended = levelSessions.length > 0;
-
-        for (const session of levelSessions) {
-          const records = await storage.getAttendanceBySession(session.id);
-          const myRecord = records.find((a) => a.studentId === user.studentId! && a.present);
-          if (myRecord) attendedSessions++;
-          else allAttended = false;
-        }
-        if (allAttended && levelSessions.length > 0) levelsCompleted++;
-      }
-
-      const eligible = levelsCompleted >= 4;
+      const progress = await buildTrainingProgress(training.id, user.studentId);
       const existingCert = await storage.getCertificate(user.studentId, training.id);
 
       let status = "In Progress";
       if (existingCert) status = "Certified";
-      else if (eligible) status = "Eligible for Certification";
+      else if (progress.eligible) status = "Eligible for Certification";
 
       formations.push({
         training,
-        currentLevel: enrollment.currentLevel,
-        totalSessions,
-        attendedSessions,
-        levelsCompleted,
-        totalLevels: 4,
-        progress: totalSessions > 0 ? Math.round((attendedSessions / totalSessions) * 100) : 0,
-        eligible,
+        currentLevel: enrollment.currentLevel ?? 1,
+        ...progress,
+        progress: progress.totalSessions > 0 ? Math.round((progress.attendedSessions / progress.totalSessions) * 100) : 0,
         status,
         certificateNumber: existingCert?.certificateNumber,
+        trainerName: trainerNameByTrainingId.get(training.id) || "Encadrant",
       });
     }
 
     const allAttendance = await storage.getAttendanceByStudent(user.studentId);
+    const attendanceBySession = new Map(
+      allAttendance.map((a: any) => [a.sessionId, a])
+    );
     const attendanceHistory = [];
-    for (const record of allAttendance) {
-      const session = await storage.getSession(record.sessionId);
-      if (!session) continue;
-      const allLevels = await Promise.all(
-        (await storage.getTrainings()).map(async (t) => {
-          const lvls = await storage.getLevelsByTraining(t.id);
-          return lvls.map((l) => ({ ...l, trainingName: t.name }));
-        })
-      );
-      const flatLevels = allLevels.flat();
-      const level = flatLevels.find((l) => l.id === session.levelId);
-      attendanceHistory.push({
-        sessionTitle: session.title,
-        trainingName: level?.trainingName || "Unknown",
-        levelName: level?.name || "Unknown",
-        date: record.markedAt || "",
-        present: record.present,
-      });
+
+    for (const enrollment of myEnrollments) {
+      const training = await storage.getTraining(enrollment.trainingId);
+      if (!training) continue;
+      const levels = await storage.getLevelsByTraining(training.id);
+      for (const level of levels) {
+        const sessions = await storage.getSessionsByLevel(level.id);
+        for (const session of sessions) {
+          const record = attendanceBySession.get(session.id);
+          const status = record ? (record.present ? "present" : "absent") : "not_marked";
+          attendanceHistory.push({
+            sessionTitle: session.title,
+            trainingName: training.name,
+            levelName: level.name,
+            date: record?.markedAt || session.date || "",
+            status,
+            note: record?.note ?? null,
+            comment: record?.comment ?? null,
+          });
+        }
+      }
     }
 
     const myCerts = await storage.getCertificatesByStudent(user.studentId);
     const enrichedCerts = await Promise.all(
       myCerts.map(async (c) => {
         const t = await storage.getTraining(c.trainingId);
-        return { ...c, trainingName: t?.name || "Unknown" };
+        return {
+          ...c,
+          issuedAt: c.issuedAt || c.issuedDate,
+          trainingName: t?.name || "Unknown",
+          trainerName: trainerNameByTrainingId.get(c.trainingId) || "Encadrant",
+        };
       })
     );
 
@@ -769,6 +1093,124 @@ export async function registerRoutes(
       attendanceHistory,
       certificates: enrichedCerts,
     });
+  });
+
+  app.get("/api/my/trainings", requireRole("student"), async (req, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || !user.studentId) {
+      return res.status(400).json({ message: "No student profile linked" });
+    }
+
+    const enrollments = await storage.getEnrollmentsByStudent(user.studentId);
+    const trainings = await Promise.all(
+      enrollments.map(async (enrollment: any) => {
+        const training = await storage.getTraining(enrollment.trainingId);
+        if (!training) return null;
+        const progress = await buildTrainingProgress(training.id, user.studentId);
+        return {
+          training,
+          enrollment,
+          progress,
+        };
+      })
+    );
+    res.json(trainings.filter(Boolean));
+  });
+
+  app.get("/api/my/trainings/:id", requireRole("student"), async (req, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || !user.studentId) {
+      return res.status(400).json({ message: "No student profile linked" });
+    }
+
+    const trainingId = asStorageId(req.params.id);
+    const enrollment = await storage.getEnrollment(user.studentId, trainingId);
+    if (!enrollment) return res.status(403).json({ message: "Not enrolled" });
+
+    const training = await storage.getTraining(trainingId);
+    if (!training) return res.status(404).json({ message: "Training not found" });
+
+    const levels = await storage.getLevelsByTraining(trainingId);
+    const attendance = await storage.getAttendanceByStudent(user.studentId);
+    const attendanceBySession = new Map(
+      attendance.map((a: any) => [a.sessionId, a])
+    );
+
+    const levelsWithSessions = await Promise.all(
+      levels.map(async (level: any) => {
+        const sessions = await storage.getSessionsByLevel(level.id);
+        const sessionsWithStatus = sessions.map((session: any) => {
+          const record = attendanceBySession.get(session.id);
+          const status = record ? (record.present ? "present" : "absent") : "not_marked";
+          return {
+            ...session,
+            status,
+            note: record?.note ?? null,
+            comment: record?.comment ?? null,
+          };
+        });
+        const allPresent = sessionsWithStatus.length > 0 && sessionsWithStatus.every((s: any) => s.status === "present");
+        return {
+          ...level,
+          sessions: sessionsWithStatus,
+          validated: allPresent,
+        };
+      })
+    );
+
+    const progress = await buildTrainingProgress(trainingId, user.studentId);
+
+    res.json({
+      training,
+      enrollment,
+      progress,
+      levels: levelsWithSessions,
+    });
+  });
+
+  app.get("/api/my/attendance", requireRole("student"), async (req, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || !user.studentId) {
+      return res.status(400).json({ message: "No student profile linked" });
+    }
+
+    const enrollments = await storage.getEnrollmentsByStudent(user.studentId);
+    const trainingIds = enrollments.map((e: any) => e.trainingId);
+    const trainings = await Promise.all(trainingIds.map((id: any) => storage.getTraining(id)));
+    const trainingMap = new Map(trainingIds.map((id: any, idx: number) => [id, trainings[idx]]));
+
+    const attendance = await storage.getAttendanceByStudent(user.studentId);
+    const attendanceBySession = new Map(attendance.map((a: any) => [a.sessionId, a]));
+
+    const allLevels = (await Promise.all(
+      trainingIds.map(async (id: any) => {
+        const lvls = await storage.getLevelsByTraining(id);
+        return lvls.map((l: any) => ({ ...l, trainingId: id }));
+      })
+    )).flat();
+
+    const allSessions = (await Promise.all(
+      allLevels.map(async (lvl: any) => {
+        const sessions = await storage.getSessionsByLevel(lvl.id);
+        return sessions.map((s: any) => ({ ...s, levelId: lvl.id, trainingId: lvl.trainingId, levelName: lvl.name }));
+      })
+    )).flat();
+
+    const rows = allSessions.map((session: any) => {
+      const record = attendanceBySession.get(session.id);
+      const training = trainingMap.get(session.trainingId);
+      const status = record ? (record.present ? "present" : "absent") : "not_marked";
+      return {
+        trainingName: training?.name || "Unknown",
+        levelName: session.levelName || "Unknown",
+        sessionTitle: session.title,
+        date: record?.markedAt || session.date || "",
+        status,
+        comment: record?.comment ?? null,
+      };
+    });
+
+    res.json(rows);
   });
 
   // ─── Trainer dashboard ───

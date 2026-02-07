@@ -44,7 +44,10 @@ const trainerMenuItems = [
 ];
 
 const studentMenuItems = [
-  { title: "Mon espace", url: "/my", icon: LayoutDashboard, color: "text-violet-600 dark:text-violet-400" },
+  { title: "Historique", url: "/my", icon: LayoutDashboard, color: "text-violet-600 dark:text-violet-400" },
+  { title: "Formations", url: "/my/trainings", icon: BookOpen, color: "text-amber-600 dark:text-amber-400" },
+  { title: "Attendance", url: "/my/attendance", icon: ClipboardCheck, color: "text-violet-500 dark:text-violet-400" },
+  { title: "Certificat", url: "/my/certificates", icon: Award, color: "text-orange-500 dark:text-orange-400" },
 ];
 
 export function AppSidebar() {
@@ -58,14 +61,19 @@ export function AppSidebar() {
       ? trainerMenuItems
       : studentMenuItems;
 
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = "/";
+  };
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="flex items-center justify-center py-4">
         <Link href={user?.role === "admin" ? "/" : user?.role === "trainer" ? "/trainer" : "/my"}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex items-center justify-center w-9 h-9 rounded-md bg-sidebar-primary cursor-pointer" data-testid="link-logo">
-                <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
+              <div className="flex items-center justify-center w-9 h-9 rounded-md bg-sidebar-primary cursor-pointer overflow-hidden" data-testid="link-logo">
+                <img src="/logo.png" alt="ASTBA" className="w-8 h-8 object-contain" />
               </div>
             </TooltipTrigger>
             <TooltipContent side="right">ASTBA</TooltipContent>
@@ -108,7 +116,7 @@ export function AppSidebar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={() => logout()}
+              onClick={handleLogout}
               className="flex items-center justify-center w-8 h-8 rounded-md text-slate-400 dark:text-slate-500 cursor-pointer"
               data-testid="button-logout"
             >

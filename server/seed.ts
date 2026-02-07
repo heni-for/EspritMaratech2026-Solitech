@@ -14,7 +14,7 @@ export async function seedDatabase() {
       role: "admin",
       studentId: null,
     });
-    console.log("Default admin created (username: admin, password: admin123)");
+    console.log("Default admin created (username: admin, password: admin)");
   }
 
   const existingStudents = await storage.getStudents();
@@ -98,7 +98,7 @@ export async function seedDatabase() {
   });
 
   console.log("Database seeded successfully!");
-  console.log("Demo accounts: admin/admin123, trainer1/trainer123, ahmed/student123");
+  console.log("Demo accounts: admin/admin, trainer1/trainer123, ahmed/student123");
 }
 
 async function ensureDemoUsers(existingStudents: { id: number; firstName: string; lastName: string }[]) {

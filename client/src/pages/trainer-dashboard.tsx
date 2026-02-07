@@ -8,7 +8,7 @@ import { BookOpen, Users, ClipboardCheck, TrendingUp } from "lucide-react";
 
 interface TrainerDashboardData {
   assignedTrainings: Array<{
-    training: { id: number; name: string; description: string | null; status: string };
+    training: { id: string; name: string; description: string | null; status: string };
     enrolledCount: number;
     levelsCount: number;
     avgAttendance: number;

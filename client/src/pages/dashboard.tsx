@@ -53,7 +53,7 @@ interface DashboardStats {
   eligibleCount: number;
   certificatesThisMonth: number;
   trainingProgress: Array<{
-    trainingId: number;
+    trainingId: string;
     trainingName: string;
     enrolledCount: number;
     completedCount: number;
@@ -65,7 +65,7 @@ interface DashboardStats {
     absent: number;
   }>;
   recentActivity: Array<{
-    id: number;
+    id: string;
     studentName: string;
     trainingName: string;
     sessionTitle: string;
@@ -279,7 +279,12 @@ export default function Dashboard() {
               <p className="text-xs text-muted-foreground mt-0.5">Apercu et progression</p>
             </div>
             <Link href="/trainings">
-              <Button variant="ghost" size="icon" data-testid="button-view-trainings">
+              <Button
+                variant="ghost"
+                size="icon"
+                data-icon-label="Voir les formations"
+                data-testid="button-view-trainings"
+              >
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
