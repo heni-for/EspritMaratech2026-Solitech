@@ -12,6 +12,7 @@ export const students = pgTable("students", {
   dateOfBirth: text("date_of_birth"),
   guardianName: text("guardian_name"),
   guardianPhone: text("guardian_phone"),
+  absenceCount: integer("absence_count").notNull().default(0),
 });
 
 export const insertStudentSchema = createInsertSchema(students).omit({ id: true });
@@ -47,6 +48,7 @@ export const sessions = pgTable("sessions", {
   sessionNumber: integer("session_number").notNull(),
   title: text("title").notNull(),
   date: text("date"),
+  status: text("status").notNull().default("pending"), // 'pending', 'en_cours', 'fini'
 });
 
 export const insertSessionSchema = createInsertSchema(sessions).omit({ id: true });
@@ -58,7 +60,10 @@ export const enrollments = pgTable("enrollments", {
   studentId: integer("student_id").notNull(),
   trainingId: integer("training_id").notNull(),
   currentLevel: integer("current_level").notNull().default(1),
+  completedSessions: integer("completed_sessions").notNull().default(0),
   enrolled: boolean("enrolled").notNull().default(true),
+  trainingStatus: text("training_status").notNull().default("in_progress"), // 'in_progress', 'completed'
+  createdAt: text("created_at").notNull().default(sql`now()`),
 });
 
 export const insertEnrollmentSchema = createInsertSchema(enrollments).omit({ id: true });
@@ -76,6 +81,19 @@ export const attendance = pgTable("attendance", {
 export const insertAttendanceSchema = createInsertSchema(attendance).omit({ id: true });
 export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
 export type Attendance = typeof attendance.$inferSelect;
+
+export const complaints = pgTable("complaints", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  studentId: integer("student_id").notNull(),
+  trainerId: varchar("trainer_id").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertComplaintSchema = createInsertSchema(complaints).omit({ id: true });
+export type InsertComplaint = z.infer<typeof insertComplaintSchema>;
+export type Complaint = typeof complaints.$inferSelect;
 
 export const certificates = pgTable("certificates", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),

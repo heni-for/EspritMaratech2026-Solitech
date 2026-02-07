@@ -7,6 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -37,11 +50,16 @@ import {
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
+  LineChart,
+  Line,
 } from "recharts";
 
 interface DashboardStats {
@@ -96,9 +114,21 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activePeriod, setActivePeriod] = useState("1s");
   const [activeFormation, setActiveFormation] = useState(0);
+  const [selectedTraining, setSelectedTraining] = useState<{ id: string; name: string } | null>(null);
+  const [enrollmentInterval, setEnrollmentInterval] = useState<"day" | "week" | "month" | "year">("month");
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const isSwiping = useRef(false);
+  
+  const { data: enrollmentHistory } = useQuery({
+    queryKey: ["/api/trainings", selectedTraining?.id, "enrollment-history", enrollmentInterval],
+    enabled: !!selectedTraining?.id,
+    queryFn: async () => {
+      const res = await fetch(`/api/trainings/${selectedTraining?.id}/enrollment-history?interval=${enrollmentInterval}`);
+      return res.json();
+    },
+  });
+  
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
   });
@@ -328,7 +358,10 @@ export default function Dashboard() {
                           transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
                           width: "240px",
                         }}
-                        onClick={() => setActiveFormation(idx)}
+                        onClick={() => {
+                          setActiveFormation(idx);
+                          setSelectedTraining({ id: tp.trainingId.toString(), name: tp.trainingName });
+                        }}
                         data-testid={`formation-card-${tp.trainingId}`}
                       >
                         <div
@@ -541,6 +574,100 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Enrollment History Modal */}
+      <Dialog open={!!selectedTraining} onOpenChange={(open) => !open && setSelectedTraining(null)}>
+        <DialogContent className="max-w-3xl max-h-[700px] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between gap-4">
+              <span>Historique des inscriptions - {selectedTraining?.name}</span>
+              <Select value={enrollmentInterval} onValueChange={(value: any) => setEnrollmentInterval(value)}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Par jour</SelectItem>
+                  <SelectItem value="week">Par semaine</SelectItem>
+                  <SelectItem value="month">Par mois</SelectItem>
+                  <SelectItem value="year">Par année</SelectItem>
+                </SelectContent>
+              </Select>
+            </DialogTitle>
+          </DialogHeader>
+          {enrollmentHistory ? (
+            <div className="space-y-6 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                  <p className="text-xs text-blue-700 dark:text-blue-400 mb-1">Total des inscriptions</p>
+                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                    {enrollmentHistory.totalEnrollments || 0}
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-950/20">
+                  <p className="text-xs text-purple-700 dark:text-purple-400 mb-1">Moyenne par intervalle</p>
+                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                    {enrollmentHistory.chartData && enrollmentHistory.chartData.length > 0
+                      ? Math.round(enrollmentHistory.totalEnrollments / enrollmentHistory.chartData.length)
+                      : 0}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold mb-3">Courbe d'inscriptions</h3>
+                {enrollmentHistory.chartData && enrollmentHistory.chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={350}>
+                    <LineChart data={enrollmentHistory.chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                      <XAxis dataKey="period" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "var(--background)",
+                          border: "1px solid var(--border)",
+                          borderRadius: "var(--radius)",
+                        }}
+                      />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="enrollments"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        dot={{ fill: "#3b82f6", r: 5 }}
+                        activeDot={{ r: 7 }}
+                        name="Inscriptions"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    Aucune donnée d'inscription disponible
+                  </p>
+                )}
+              </div>
+
+              {enrollmentHistory.chartData && enrollmentHistory.chartData.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3">Détails par intervalle</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    {enrollmentHistory.chartData.map((item: any, idx: number) => (
+                      <div key={idx} className="p-2 rounded-md bg-muted/50 text-center">
+                        <p className="text-xs text-muted-foreground mb-1">{item.period}</p>
+                        <p className="text-lg font-bold text-primary">{item.enrollments}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-8">
+              <Skeleton className="h-48 w-full" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -24,8 +24,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ClipboardCheck, Users, Save } from "lucide-react";
+import { ClipboardCheck, Users, Save, AlertCircle } from "lucide-react";
 import { StatusIndicator } from "@/components/accessibility/status-indicator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 interface TrainingOption {
   id: string;
   name: string;
@@ -37,6 +45,7 @@ interface TrainingOption {
       id: string;
       sessionNumber: number;
       title: string;
+      status?: "pending" | "en_cours" | "fini";
     }>;
   }>;
 }
@@ -56,6 +65,9 @@ export default function AttendancePage() {
   const [attendanceState, setAttendanceState] = useState<Map<string, boolean>>(new Map());
   const [notesState, setNotesState] = useState<Map<string, string>>(new Map());
   const [commentsState, setCommentsState] = useState<Map<string, string>>(new Map());
+  const [complaintDialogOpen, setComplaintDialogOpen] = useState(false);
+  const [selectedStudentForComplaint, setSelectedStudentForComplaint] = useState<{ id: string; name: string } | null>(null);
+  const [complaintMessage, setComplaintMessage] = useState("");
   const { toast } = useToast();
 
   const { data: trainingOptions = [], isLoading: loadingTrainings } = useQuery<TrainingOption[]>({
@@ -65,6 +77,7 @@ export default function AttendancePage() {
   const currentTraining = trainingOptions.find((t) => t.id.toString() === selectedTraining);
   const currentLevel = currentTraining?.levels.find((l) => l.id.toString() === selectedLevel);
   const currentSession = currentLevel?.sessions.find((s) => s.id.toString() === selectedSession);
+  const isSessionLocked = currentSession?.status === "fini";
 
   const { data: attendanceData, isLoading: loadingAttendance } = useQuery<AttendanceRecord[]>({
     queryKey: ["/api/attendance", selectedSession],
@@ -79,10 +92,28 @@ export default function AttendancePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/attendance", selectedSession] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({ title: "Seance validee avec succes" });
+      toast({ title: "Seance verrouillee avec succes" });
     },
     onError: (error: Error) => {
       toast({ title: "Erreur lors de l'enregistrement", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const complaintMutation = useMutation({
+    mutationFn: async ({ studentId, message }: { studentId: string; message: string }) => {
+      const res = await apiRequest("POST", "/api/complaints", { studentId, message });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/complaints"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setComplaintDialogOpen(false);
+      setComplaintMessage("");
+      setSelectedStudentForComplaint(null);
+      toast({ title: "Reclamation envoyee avec succes" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur lors de l'envoi de la reclamation", description: error.message, variant: "destructive" });
     },
   });
 
@@ -268,14 +299,19 @@ export default function AttendancePage() {
                   Seance {currentSession.sessionNumber}
                 </Badge>
               )}
+              {isSessionLocked && (
+                <Badge variant="destructive" className="text-xs ml-1">
+                  Verrouillee
+                </Badge>
+              )}
             </CardTitle>
             <Button
               onClick={handleSave}
-              disabled={saveMutation.isPending || !attendanceData || attendanceData.length === 0}
+              disabled={saveMutation.isPending || !attendanceData || attendanceData.length === 0 || isSessionLocked}
               data-testid="button-save-attendance"
             >
               <Save className="h-4 w-4 mr-2" />
-              {saveMutation.isPending ? "Validation..." : "Valider la seance"}
+              {isSessionLocked ? "Seance Verrouillee" : saveMutation.isPending ? "Validation..." : "Valider la seance"}
             </Button>
           </CardHeader>
           <CardContent className="p-0">
@@ -302,6 +338,7 @@ export default function AttendancePage() {
                     <TableHead className="w-[90px] text-center">Present</TableHead>
                     <TableHead className="w-[110px] text-center">Note</TableHead>
                     <TableHead>Commentaire</TableHead>
+                    <TableHead className="w-[120px] text-center">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -315,39 +352,56 @@ export default function AttendancePage() {
                         <TableCell>
                           <span className="text-sm font-medium">{record.studentName}</span>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Checkbox
-                            checked={isPresent}
-                            onCheckedChange={(checked) =>
-                              handleToggle(record.studentId, checked === true)
-                            }
-                            aria-label={`Presence pour ${record.studentName}`}
-                            data-testid={`checkbox-attendance-${record.studentId}`}
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Input
-                            type="number"
-                            min={0}
-                            max={20}
-                            className="h-8 w-20 text-center"
-                            value={getNoteValue(record.studentId, record.note)}
-                            onChange={(e) => handleNoteChange(record.studentId, e.target.value)}
-                            placeholder="0-20"
-                            aria-label={`Note pour ${record.studentName}`}
-                            data-testid={`input-note-${record.studentId}`}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            className="h-8"
-                            value={getCommentValue(record.studentId, record.comment)}
-                            onChange={(e) => handleCommentChange(record.studentId, e.target.value)}
-                            placeholder="Observation..."
-                            aria-label={`Commentaire pour ${record.studentName}`}
-                            data-testid={`input-comment-${record.studentId}`}
-                          />
-                        </TableCell>
+                      <TableCell className="text-center">
+                        <Checkbox
+                          checked={isPresent}
+                          onCheckedChange={(checked) =>
+                            handleToggle(record.studentId, checked === true)
+                          }
+                          disabled={isSessionLocked}
+                          aria-label={`Presence pour ${record.studentName}`}
+                          data-testid={`checkbox-attendance-${record.studentId}`}
+                        />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={20}
+                          className="h-8 w-20 text-center"
+                          value={getNoteValue(record.studentId, record.note)}
+                          onChange={(e) => handleNoteChange(record.studentId, e.target.value)}
+                          disabled={isSessionLocked}
+                          placeholder="0-20"
+                          aria-label={`Note pour ${record.studentName}`}
+                          data-testid={`input-note-${record.studentId}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          className="h-8"
+                          value={getCommentValue(record.studentId, record.comment)}
+                          onChange={(e) => handleCommentChange(record.studentId, e.target.value)}
+                          disabled={isSessionLocked}
+                          placeholder="Observation..."
+                          aria-label={`Commentaire pour ${record.studentName}`}
+                          data-testid={`input-comment-${record.studentId}`}
+                        />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedStudentForComplaint({ id: record.studentId, name: record.studentName });
+                            setComplaintDialogOpen(true);
+                          }}
+                          className="gap-1"
+                        >
+                          <AlertCircle className="h-4 w-4" />
+                          <span className="text-xs">Reclamation</span>
+                        </Button>
+                      </TableCell>
                       </TableRow>
                     );
                   })}
@@ -369,6 +423,56 @@ export default function AttendancePage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={complaintDialogOpen} onOpenChange={setComplaintDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Declarer une reclamation</DialogTitle>
+            <DialogDescription>
+              Reclamation pour : <span className="font-semibold text-foreground">{selectedStudentForComplaint?.name}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="complaint-message" className="text-sm font-medium">
+                Message de reclamation
+              </Label>
+              <textarea
+                id="complaint-message"
+                placeholder="Decrivez les raisons de votre reclamation..."
+                className="mt-2 w-full min-h-[120px] p-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+                value={complaintMessage}
+                onChange={(e) => setComplaintMessage(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setComplaintDialogOpen(false);
+                setComplaintMessage("");
+                setSelectedStudentForComplaint(null);
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedStudentForComplaint && complaintMessage.trim()) {
+                  complaintMutation.mutate({
+                    studentId: selectedStudentForComplaint.id,
+                    message: complaintMessage,
+                  });
+                }
+              }}
+              disabled={!complaintMessage.trim() || complaintMutation.isPending}
+            >
+              {complaintMutation.isPending ? "Envoi..." : "Envoyer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -47,8 +47,6 @@ export default function StudentsPage() {
       email: "",
       phone: "",
       dateOfBirth: "",
-      guardianName: "",
-      guardianPhone: "",
     },
   });
 
@@ -179,34 +177,6 @@ export default function StudentsPage() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField
-                    control={form.control}
-                    name="guardianName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nom du tuteur</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Tuteur" {...field} value={field.value ?? ""} data-testid="input-guardian-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="guardianPhone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tel. du tuteur</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Telephone" {...field} value={field.value ?? ""} data-testid="input-guardian-phone" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-student">
                   {createMutation.isPending ? "Ajout..." : "Ajouter l'eleve"}
                 </Button>
@@ -250,7 +220,8 @@ export default function StudentsPage() {
                   <TableHead>Nom</TableHead>
                   <TableHead className="hidden sm:table-cell">Email</TableHead>
                   <TableHead className="hidden md:table-cell">Telephone</TableHead>
-                  <TableHead className="hidden lg:table-cell">Tuteur</TableHead>
+                  <TableHead className="hidden lg:table-cell text-center">Absences</TableHead>
+                  <TableHead className="hidden lg:table-cell text-center">Reclamations</TableHead>
                   <TableHead className="w-[80px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -276,8 +247,15 @@ export default function StudentsPage() {
                     <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                       {student.phone || "—"}
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                      {student.guardianName || "—"}
+                    <TableCell className="hidden lg:table-cell text-center">
+                      <Badge variant={student.absenceCount && student.absenceCount > 5 ? "destructive" : "secondary"}>
+                        {student.absenceCount || 0}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-center">
+                      <Badge variant={student.complaintCount && student.complaintCount > 0 ? "destructive" : "secondary"}>
+                        {student.complaintCount || 0}
+                      </Badge>
                     </TableCell>
                       <TableCell className="flex items-center justify-end gap-2">
                         <Link href={`/students/${student.id}`}>
@@ -324,4 +302,6 @@ interface StudentLite {
   dateOfBirth?: string | null;
   guardianName?: string | null;
   guardianPhone?: string | null;
+  absenceCount?: number;
+  complaintCount?: number;
 }

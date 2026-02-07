@@ -3,7 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -108,11 +108,13 @@ function AuthenticatedApp() {
         <a href="#main-content" className="skip-link">Aller au contenu</a>
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-end gap-2 p-2 border-b bg-background sticky top-0 z-50">
-            <Button variant="ghost" size="sm" className="gap-2" data-testid="button-profile">
-              <User className="h-4 w-4" />
-              Profil
-            </Button>
+          <header className="flex items-center justify-between gap-2 p-2 border-b bg-background sticky top-0 z-50">
+            <SidebarTrigger className="lg:hidden" />
+            <div className="flex items-center justify-end gap-2 ml-auto">
+              <Button variant="ghost" size="sm" className="gap-2" data-testid="button-profile">
+                <User className="h-4 w-4" />
+                Profil
+              </Button>
             <Link href="/settings">
               <Button
                 variant="ghost"
@@ -124,7 +126,8 @@ function AuthenticatedApp() {
                 Parametres
               </Button>
             </Link>
-            <ThemeToggle />
+              <ThemeToggle />
+            </div>
           </header>
           <main id="main-content" className="flex-1 overflow-auto">
             {user?.role === "admin" && <AdminRoutes />}

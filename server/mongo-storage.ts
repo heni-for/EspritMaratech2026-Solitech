@@ -48,6 +48,7 @@ export interface IStorageMongo {
   getSessionsByLevel(levelId: string): Promise<any[]>;
   getSession(id: string): Promise<any | undefined>;
   createSession(data: any): Promise<any>;
+  updateSession(id: string, data: Partial<any>): Promise<any | undefined>;
   
   getEnrollmentsByTraining(trainingId: string): Promise<any[]>;
   getEnrollmentsByStudent(studentId: string): Promise<any[]>;
@@ -58,6 +59,10 @@ export interface IStorageMongo {
   getAttendanceBySession(sessionId: string): Promise<any[]>;
   getAttendanceByStudent(studentId: string): Promise<any[]>;
   upsertAttendance(data: any): Promise<any>;
+
+  getComplaints(): Promise<any[]>;
+  getComplaintsByStudent(studentId: string): Promise<any[]>;
+  createComplaint(data: any): Promise<any>;
   
   getCertificates(): Promise<any[]>;
   getCertificate(studentId: string, trainingId: string): Promise<any | undefined>;
@@ -214,13 +219,24 @@ export class MongoDBStorage implements IStorageMongo {
     const result = await db.collection("sessions").insertOne({
       levelId: new ObjectId(data.levelId),
       sessionNumber: data.sessionNumber,
+      title: data.title || `Session ${data.sessionNumber}`,
       date: data.date || null,
+      status: data.status || "pending",
       startTime: data.startTime || "09:00",
       endTime: data.endTime || "11:00",
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     return normalizeDoc({ _id: result.insertedId, ...data });
+  }
+
+  async updateSession(id: string, data: Partial<any>): Promise<any | undefined> {
+    const result = await db.collection("sessions").findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: { ...data, updatedAt: new Date() } },
+      { returnDocument: "after" }
+    );
+    return normalizeDoc(result.value);
   }
 
   // Enrollment operations
@@ -243,6 +259,7 @@ export class MongoDBStorage implements IStorageMongo {
   }
 
   async createEnrollment(data: any): Promise<any> {
+    const now = new Date().toISOString();
     const result = await db.collection("enrollments").insertOne({
       studentId: new ObjectId(data.studentId),
       trainingId: new ObjectId(data.trainingId),
@@ -250,8 +267,8 @@ export class MongoDBStorage implements IStorageMongo {
       status: data.status || "active",
       currentLevel: data.currentLevel ?? 1,
       enrolled: data.enrolled ?? true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     });
     return normalizeDoc({ _id: result.insertedId, ...data });
   }
@@ -277,6 +294,16 @@ export class MongoDBStorage implements IStorageMongo {
   }
 
   async upsertAttendance(data: any): Promise<any> {
+    // Check if this is a new absence or a change from present to absent
+    const existing = await db.collection("attendance").findOne({
+      studentId: new ObjectId(data.studentId),
+      sessionId: new ObjectId(data.sessionId),
+    });
+
+    const wasPresent = existing?.present !== false;
+    const isNowAbsent = data.present === false;
+
+    // Update attendance record
     const result = await db.collection("attendance").updateOne(
       {
         studentId: new ObjectId(data.studentId),
@@ -298,7 +325,50 @@ export class MongoDBStorage implements IStorageMongo {
       },
       { upsert: true }
     );
+
+    // Increment absence count if student is now marked absent (and wasn't before)
+    if (isNowAbsent && (wasPresent || !existing)) {
+      await db.collection("students").updateOne(
+        { _id: new ObjectId(data.studentId) },
+        { $inc: { absenceCount: 1 } }
+      );
+    }
+    // Decrement absence count if student was absent but is now marked present
+    else if (!isNowAbsent && existing && !wasPresent) {
+      await db.collection("students").updateOne(
+        { _id: new ObjectId(data.studentId) },
+        { $inc: { absenceCount: -1 } }
+      );
+    }
+
     return result;
+  }
+
+  // Complaint operations
+  async getComplaints(): Promise<any[]> {
+    const complaints = await db.collection("complaints").find().sort({ createdAt: -1 }).toArray();
+    return normalizeDocs(complaints);
+  }
+
+  async getComplaintsByStudent(studentId: string): Promise<any[]> {
+    const complaints = await db.collection("complaints")
+      .find({ studentId: new ObjectId(studentId) })
+      .sort({ createdAt: -1 })
+      .toArray();
+    return normalizeDocs(complaints);
+  }
+
+  async createComplaint(data: any): Promise<any> {
+    const now = new Date().toISOString();
+    const result = await db.collection("complaints").insertOne({
+      studentId: new ObjectId(data.studentId),
+      trainerId: new ObjectId(data.trainerId),
+      message: data.message,
+      status: data.status || "open",
+      createdAt: now,
+      updatedAt: new Date(),
+    });
+    return normalizeDoc({ _id: result.insertedId, ...data, createdAt: now });
   }
 
   // Certificate operations

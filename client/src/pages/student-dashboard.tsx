@@ -35,6 +35,7 @@ interface StudentDashboardData {
   }>;
   attendanceHistory: Array<{
     status: "present" | "absent" | "not_marked";
+    date?: string;
   }>;
   certificates: Array<{
     id: string;
@@ -78,6 +79,26 @@ export default function StudentDashboard() {
   const attendedSessions = formations.reduce((acc, f) => acc + f.attendedSessions, 0);
   const absentSessions = formations.reduce((acc, f) => acc + (f.absentCount || 0), 0);
   const remainingSessions = Math.max(0, totalSessions - attendedSessions - absentSessions);
+
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay());
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
+
+  const todayAttendanceStatus = (() => {
+    const todayRecords = (data.attendanceHistory || []).filter((record) => {
+      const dateStr = record.date ? record.date.split("T")[0] : "";
+      return dateStr === todayStr;
+    });
+    if (todayRecords.some((r) => r.status === "absent")) return "absent";
+    if (todayRecords.some((r) => r.status === "present")) return "present";
+    return null;
+  })();
 
   const certStatus = (() => {
     if (formations.some((f) => f.eligible)) return "Eligible";
@@ -181,19 +202,33 @@ export default function StudentDashboard() {
               Cette semaine
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-2xl border p-6 bg-slate-50">
+          <CardContent className="space-y-6">
+            <div className="rounded-2xl border p-8 bg-slate-50">
               <div className="grid grid-cols-7 text-center text-xs text-slate-500 font-medium">
                 {["DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM"].map((d) => (
                   <div key={d}>{d}</div>
                 ))}
               </div>
-              <div className="mt-4 grid grid-cols-7 gap-3 text-center text-sm">
-                {[28, 29, 30, 1, 2, 3, 4].map((day) => (
-                  <div key={day} className={`rounded-full py-2 ${day === 2 ? "bg-blue-600 text-white" : "text-slate-700"}`}>
-                    {day}
-                  </div>
-                ))}
+              <div className="mt-6 grid grid-cols-7 gap-4 text-center text-sm">
+                {weekDays.map((day) => {
+                  const dayStr = day.toISOString().split("T")[0];
+                  const isToday = dayStr === todayStr;
+                  const status = isToday ? todayAttendanceStatus : null;
+                  const statusClass =
+                    status === "present"
+                      ? "bg-emerald-500 text-white"
+                      : status === "absent"
+                      ? "bg-rose-500 text-white"
+                      : "bg-white text-slate-700 border";
+                  return (
+                    <div
+                      key={dayStr}
+                      className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full ${statusClass}`}
+                    >
+                      {day.getDate()}
+                    </div>
+                  );
+                })}
               </div>
               <div className="mt-4 rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
                 Debut d'un cours le 02

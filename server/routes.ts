@@ -545,9 +545,27 @@ export async function registerRoutes(
   });
 
   // ─── Students ───
-  app.get("/api/students", requireRole("admin", "trainer"), async (_req, res) => {
+  app.get("/api/students", requireRole("admin", "trainer"), async (req, res) => {
     const allStudents = await storage.getStudents();
-    res.json(allStudents);
+
+    if (req.session.role !== "admin") {
+      return res.json(allStudents);
+    }
+
+    const complaints = await storage.getComplaints();
+    const complaintCounts = new Map<string, number>();
+    for (const complaint of complaints) {
+      const key = complaint.studentId?.toString();
+      if (!key) continue;
+      complaintCounts.set(key, (complaintCounts.get(key) || 0) + 1);
+    }
+
+    const enriched = allStudents.map((s: any) => ({
+      ...s,
+      complaintCount: complaintCounts.get(s.id?.toString() || "") || 0,
+    }));
+
+    res.json(enriched);
   });
 
   app.get("/api/students/:id", requireAuth, async (req, res) => {
@@ -672,6 +690,60 @@ export async function registerRoutes(
     if (!student) return res.status(404).json({ message: "Student not found" });
     await storage.deleteStudent(id);
     res.json({ message: "Student deleted" });
+  });
+
+  // ─── Complaints ───
+  app.post("/api/complaints", requireRole("trainer"), async (req, res) => {
+    const { studentId, message } = req.body;
+    if (!studentId || !message || typeof message !== "string") {
+      return res.status(400).json({ message: "studentId and message are required" });
+    }
+
+    const student = await storage.getStudent(asStorageId(studentId));
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const complaint = await storage.createComplaint({
+      studentId: asStorageId(studentId),
+      trainerId: req.session.userId,
+      message: message.trim(),
+      status: "open",
+    });
+
+    res.json(complaint);
+  });
+
+  app.get("/api/complaints", requireRole("admin"), async (req, res) => {
+    const studentId = req.query.studentId ? asStorageId(String(req.query.studentId)) : null;
+    const complaints = studentId
+      ? await storage.getComplaintsByStudent(studentId)
+      : await storage.getComplaints();
+
+    const users = await storage.getUsers();
+    const userMap = new Map(users.map((u: any) => [u.id?.toString(), u.fullName]));
+
+    const enriched = complaints.map((c: any) => ({
+      ...c,
+      trainerName: userMap.get(c.trainerId?.toString()) || "Encadrant",
+    }));
+
+    res.json(enriched);
+  });
+
+  app.get("/api/complaints/student/:id", requireRole("admin"), async (req, res) => {
+    const studentId = asStorageId(req.params.id);
+    const complaints = await storage.getComplaintsByStudent(studentId);
+
+    const users = await storage.getUsers();
+    const userMap = new Map(users.map((u: any) => [u.id?.toString(), u.fullName]));
+
+    const enriched = complaints.map((c: any) => ({
+      ...c,
+      trainerName: userMap.get(c.trainerId?.toString()) || "Encadrant",
+    }));
+
+    res.json(enriched);
   });
 
   // ─── Trainings ───
@@ -844,6 +916,7 @@ export async function registerRoutes(
                 id: s.id,
                 sessionNumber: s.sessionNumber,
                 title: s.title,
+                status: s.status || "pending",
               })),
             };
           })
@@ -1499,6 +1572,151 @@ export async function registerRoutes(
       alerts,
       totalUsers,
       trainerCount,
+    });
+  });
+
+  // Get enrollment history for a training with variable time interval
+  app.get("/api/trainings/:trainingId/enrollment-history", requireRole("admin"), async (req, res) => {
+    const trainingId = asStorageId(req.params.trainingId);
+    const interval = (req.query.interval as string) || "month"; // day, week, month, year
+    const enrollments = await storage.getEnrollmentsByTraining(trainingId);
+
+    // Group enrollments by time interval
+    const periodMap: { [key: string]: number } = {};
+    
+    enrollments.forEach((enrollment) => {
+      if (enrollment.createdAt) {
+        const createdDate = new Date(enrollment.createdAt);
+        let period = "";
+        
+        switch (interval) {
+          case "day":
+            period = createdDate.toISOString().split('T')[0]; // YYYY-MM-DD
+            break;
+          case "week": {
+            const weekStart = new Date(createdDate);
+            weekStart.setDate(createdDate.getDate() - createdDate.getDay());
+            const weekNum = Math.ceil((createdDate.getDate() - weekStart.getDate() + 1) / 7);
+            period = "W" + weekNum.toString().padStart(2, '0') + " " + createdDate.toISOString().slice(0, 7);
+            break;
+          }
+          case "month":
+            period = createdDate.toISOString().slice(0, 7); // YYYY-MM
+            break;
+          case "year":
+            period = createdDate.toISOString().slice(0, 4); // YYYY
+            break;
+        }
+        
+        periodMap[period] = (periodMap[period] || 0) + 1;
+      }
+    });
+
+    // Format for chart - sorted by date
+    const chartData = Object.entries(periodMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([period, count]) => ({
+        period,
+        enrollments: count,
+      }));
+
+    res.json({
+      trainingId,
+      totalEnrollments: enrollments.length,
+      chartData,
+      interval,
+    });
+  });
+
+  // Mark session as finished and handle level/training progression
+  app.post("/api/sessions/:sessionId/complete", requireRole("trainer"), async (req, res) => {
+    const sessionId = asStorageId(req.params.sessionId);
+
+    // Get session details
+    const session = await storage.getSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    // Get level details
+    const allLevels = (await Promise.all(
+      (await storage.getTrainings()).map((t: any) => storage.getLevelsByTraining(t.id))
+    )).flat();
+    const level = allLevels.find((l: any) => l.id === session.levelId);
+    if (!level) {
+      return res.status(404).json({ message: "Level not found" });
+    }
+
+    // Get training details
+    const training = await storage.getTraining(level.trainingId);
+    if (!training) {
+      return res.status(404).json({ message: "Training not found" });
+    }
+
+    // Check trainer authorization
+    if (req.session.role === "trainer") {
+      const assignments = await storage.getTrainerAssignments(req.session.userId!);
+      if (!assignments.some((a: any) => a.trainingId === level.trainingId)) {
+        return res.status(403).json({ message: "Not authorized for this training" });
+      }
+    }
+
+    // Update session status to "fini"
+    await storage.updateSession(sessionId, { status: "fini", markedAt: new Date().toISOString() });
+
+    // Get all enrollments for this training
+    const enrollments = await storage.getEnrollmentsByTraining(level.trainingId);
+
+    // Process each enrollment for this training
+    for (const enrollment of enrollments) {
+      if (enrollment.currentLevel !== level.levelNumber) continue; // Only process students in this level
+
+      // Increment completed sessions count
+      const completedSessions = (enrollment.completedSessions || 0) + 1;
+      const allLevelsForTraining = await storage.getLevelsByTraining(level.trainingId);
+      const maxSessions = 6; // 6 sessions per level
+
+      let newLevel = enrollment.currentLevel;
+      let newCompletedSessions = completedSessions;
+      let trainingStatus = enrollment.trainingStatus || "in_progress";
+
+      // Check if student completed all sessions in this level
+      if (completedSessions >= maxSessions) {
+        newCompletedSessions = 0; // Reset counter for next level
+
+        // Check if there are more levels
+        if (level.levelNumber < allLevelsForTraining.length) {
+          // Promote to next level
+          newLevel = enrollment.currentLevel + 1;
+        } else if (level.levelNumber === allLevelsForTraining.length) {
+          // Completed final level - mark training as complete
+          trainingStatus = "completed";
+          // Create certificate
+          const certNumber = `CERT-${training.id}-${enrollment.studentId}-${Date.now()}`;
+          await storage.createCertificate({
+            studentId: enrollment.studentId,
+            trainingId: level.trainingId,
+            issuedAt: new Date().toISOString(),
+            certificateNumber: certNumber,
+          });
+        }
+      }
+
+      // Update enrollment
+      await storage.updateEnrollment(enrollment.studentId, level.trainingId, {
+        currentLevel: newLevel,
+        completedSessions: newCompletedSessions,
+        trainingStatus,
+      });
+    }
+
+    res.json({
+      message: "Session marked as completed",
+      session: { ...session, status: "fini" },
+      levelProgression: {
+        level: level.levelNumber,
+        totalSessions: 6,
+      },
     });
   });
 

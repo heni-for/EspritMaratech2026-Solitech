@@ -72,11 +72,11 @@ export function AppSidebar() {
         <Link href={user?.role === "admin" ? "/" : user?.role === "trainer" ? "/trainer" : "/my"}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex items-center justify-center w-9 h-9 rounded-md bg-sidebar-primary cursor-pointer overflow-hidden" data-testid="link-logo">
-                <img src="/logo.png" alt="ASTBA" className="w-8 h-8 object-contain" />
+              <div className="flex items-center justify-center w-9 h-9 rounded-md cursor-pointer overflow-hidden" data-testid="link-logo">
+                <img src="/logocertif.png" alt="Esprit Maratech 2026" className="w-8 h-8 object-contain" />
               </div>
             </TooltipTrigger>
-            <TooltipContent side="right">ASTBA</TooltipContent>
+            <TooltipContent side="right">Esprit Maratech</TooltipContent>
           </Tooltip>
         </Link>
       </SidebarHeader>

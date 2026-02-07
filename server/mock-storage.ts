@@ -5,6 +5,7 @@ import {
   type Session, type InsertSession,
   type Enrollment, type InsertEnrollment,
   type Attendance, type InsertAttendance,
+  type Complaint, type InsertComplaint,
   type Certificate, type InsertCertificate,
   type User, type InsertUser,
   type TrainerAssignment, type InsertTrainerAssignment,
@@ -27,6 +28,7 @@ export class MockStorage {
   private sessions: Map<number, Session> = new Map();
   private enrollments: Map<string, Enrollment> = new Map();
   private attendance: Map<number, Attendance> = new Map();
+  private complaints: Map<number, Complaint> = new Map();
   private certificates: Map<string, Certificate> = new Map();
   private users: Map<string, User> = new Map();
   private trainerAssignments: Map<number, TrainerAssignment> = new Map();
@@ -37,6 +39,7 @@ export class MockStorage {
   private nextSessionId = 1;
   private nextEnrollmentId = 1;
   private nextAttendanceId = 1;
+  private nextComplaintId = 1;
   private nextCertificateId = 1;
   private nextTrainerAssignmentId = 1;
   private initialized = false;
@@ -73,6 +76,7 @@ export class MockStorage {
       dateOfBirth: "2010-03-15",
       guardianName: "Mohamed Ben Ali",
       guardianPhone: "+216 98 765 432",
+      absenceCount: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -286,7 +290,9 @@ export class MockStorage {
       id,
       levelId: data.levelId,
       sessionNumber: data.sessionNumber,
+      title: (data as any).title || `Session ${data.sessionNumber}`,
       date: (data as any).date || null,
+      status: (data as any).status || "pending",
       startTime: (data as any).startTime || "09:00",
       endTime: (data as any).endTime || "11:00",
       createdAt: new Date(),
@@ -294,6 +300,20 @@ export class MockStorage {
     };
     this.sessions.set(id, session);
     return session;
+  }
+
+  async updateSession(id: number, data: Partial<Session>): Promise<Session | undefined> {
+    const idNum = toNumberId(id);
+    const session = this.sessions.get(idNum);
+    if (!session) return undefined;
+    
+    const updated: Session = {
+      ...session,
+      ...data,
+      updatedAt: new Date(),
+    };
+    this.sessions.set(idNum, updated);
+    return updated;
   }
 
   async getEnrollmentsByTraining(trainingId: number): Promise<Enrollment[]> {
@@ -316,6 +336,7 @@ export class MockStorage {
     const id = this.nextEnrollmentId++;
     const studentId = toNumberId((data as any).studentId);
     const trainingId = toNumberId((data as any).trainingId);
+    const now = new Date().toISOString();
     const enrollment: Enrollment = {
       id,
       studentId,
@@ -324,8 +345,8 @@ export class MockStorage {
       status: (data as any).status || "active",
       currentLevel: (data as any).currentLevel ?? 1,
       enrolled: (data as any).enrolled ?? true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     };
     this.enrollments.set(`${studentId}-${trainingId}`, enrollment);
     return enrollment;
@@ -361,6 +382,9 @@ export class MockStorage {
     const key = `${studentId}-${sessionId}`;
     let attendance = this.attendance.get(key as any);
     
+    const wasPresent = attendance ? attendance.present !== false : true;
+    const isNowAbsent = (data as any).present === false;
+    
     if (attendance) {
       attendance.present = (data as any).present !== false;
       (attendance as any).note = (data as any).note ?? null;
@@ -382,7 +406,60 @@ export class MockStorage {
       } as Attendance;
       this.attendance.set(id, attendance);
     }
+
+    // Update student absence count
+    const student = this.students.get(studentId);
+    if (student) {
+      // Initialize absenceCount if not present
+      if ((student as any).absenceCount === undefined) {
+        (student as any).absenceCount = 0;
+      }
+      
+      // Increment if now absent (and wasn't before or is new record)
+      if (isNowAbsent && wasPresent) {
+        (student as any).absenceCount += 1;
+      }
+      // Decrement if was absent but now present
+      else if (!isNowAbsent && !wasPresent && attendance.id !== this.nextAttendanceId - 1) {
+        (student as any).absenceCount = Math.max(0, (student as any).absenceCount - 1);
+      }
+    }
+
     return attendance;
+  }
+
+  async getComplaints(): Promise<Complaint[]> {
+    return Array.from(this.complaints.values()).sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
+  }
+
+  async getComplaintsByStudent(studentId: number): Promise<Complaint[]> {
+    const idNum = toNumberId(studentId);
+    return Array.from(this.complaints.values())
+      .filter((c) => c.studentId === idNum)
+      .sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+      });
+  }
+
+  async createComplaint(data: InsertComplaint): Promise<Complaint> {
+    const id = this.nextComplaintId++;
+    const now = new Date().toISOString();
+    const complaint: Complaint = {
+      id,
+      studentId: toNumberId((data as any).studentId),
+      trainerId: (data as any).trainerId,
+      message: (data as any).message,
+      status: (data as any).status || "open",
+      createdAt: now,
+    } as Complaint;
+    this.complaints.set(id, complaint);
+    return complaint;
   }
 
   async getCertificates(): Promise<Certificate[]> {
