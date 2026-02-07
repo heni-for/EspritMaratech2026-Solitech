@@ -31,8 +31,6 @@ import {
   ArrowRight,
   UserCog,
   GraduationCap,
-  Percent,
-  FileCheck,
   Info,
   Download,
 } from "lucide-react";
@@ -139,14 +137,6 @@ export default function Dashboard() {
     isSwiping.current = false;
   }, [activeFormation, maxFormations]);
 
-  const statCards = [
-    { label: "Total eleves", value: stats?.totalStudents ?? 0, icon: Users, color: "bg-violet-500/15 text-violet-600 dark:text-violet-400", change: null },
-    { label: "Formations actives", value: stats?.activeTrainings ?? 0, icon: BookOpen, color: "bg-orange-500/15 text-orange-600 dark:text-orange-400", change: null },
-    { label: "Presences aujourd'hui", value: stats?.todayAttendance ?? 0, icon: Calendar, color: "bg-blue-500/15 text-blue-600 dark:text-blue-400", change: null },
-    { label: "Taux de presence", value: `${stats?.attendanceRate ?? 0}%`, icon: Percent, color: "bg-teal-500/15 text-teal-600 dark:text-teal-400", change: null },
-    { label: "Eligibles certificat", value: stats?.eligibleCount ?? 0, icon: FileCheck, color: "bg-purple-500/15 text-purple-600 dark:text-purple-400", change: null },
-    { label: "Certificats ce mois", value: stats?.certificatesThisMonth ?? 0, icon: Award, color: "bg-rose-500/15 text-rose-600 dark:text-rose-400", change: `${stats?.certificatesIssued ?? 0} total` },
-  ];
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
@@ -189,36 +179,6 @@ export default function Dashboard() {
             </Button>
           </Link>
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {statCards.map((stat, i) => (
-          <Card key={i} data-testid={`card-stat-${i}`}>
-            {isLoading ? (
-              <CardContent className="p-4">
-                <Skeleton className="h-9 w-9 rounded-md mb-3" />
-                <Skeleton className="h-7 w-14 mb-1" />
-                <Skeleton className="h-3 w-20" />
-              </CardContent>
-            ) : (
-              <CardContent className="p-4">
-                <div className={`flex items-center justify-center w-9 h-9 rounded-md mb-3 ${stat.color}`} data-testid={`icon-stat-${i}`}>
-                  <stat.icon className="h-4 w-4" />
-                </div>
-                <div
-                  className="text-xl font-bold leading-none"
-                  data-testid={`stat-${stat.label.toLowerCase().replace(/\s+/g, "-").replace(/'/g, "")}`}
-                >
-                  {stat.value}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1.5" data-testid={`label-stat-${i}`}>{stat.label}</p>
-                {stat.change && (
-                  <p className="text-xs text-muted-foreground mt-0.5" data-testid={`change-stat-${i}`}>{stat.change}</p>
-                )}
-              </CardContent>
-            )}
-          </Card>
-        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
