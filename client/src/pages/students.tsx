@@ -47,6 +47,8 @@ export default function StudentsPage() {
       email: "",
       phone: "",
       dateOfBirth: "",
+      guardianName: "",
+      guardianPhone: "",
     },
   });
 
@@ -177,6 +179,34 @@ export default function StudentsPage() {
                     </FormItem>
                   )}
                 />
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="guardianName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nom du tuteur</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Tuteur" {...field} value={field.value ?? ""} data-testid="input-guardian-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="guardianPhone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tel. du tuteur</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Telephone" {...field} value={field.value ?? ""} data-testid="input-guardian-phone" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-student">
                   {createMutation.isPending ? "Ajout..." : "Ajouter l'eleve"}
                 </Button>
