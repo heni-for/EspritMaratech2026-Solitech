@@ -15,6 +15,7 @@ import { applyAccessibility, defaultAccessibility, loadAccessibility, saveAccess
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
+import HomePage from "@/pages/home";
 import Dashboard from "@/pages/dashboard";
 import StudentsPage from "@/pages/students";
 import StudentDetailPage from "@/pages/student-detail";
@@ -152,7 +153,15 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return (
+      <Switch>
+        <Route path="/" component={HomePage} />
+        <Route path="/login" component={LoginPage} />
+        <Route>
+          <Redirect to="/" />
+        </Route>
+      </Switch>
+    );
   }
 
   return <AuthenticatedApp />;

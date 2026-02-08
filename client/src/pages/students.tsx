@@ -14,7 +14,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -27,12 +35,17 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { insertStudentSchema, type InsertStudent } from "@shared/schema";
-import { Plus, Search, Users, UserPlus, Eye, Trash2 } from "lucide-react";
+import { FaceCapture } from "@/components/face-capture";
+import { Plus, Search, Users, UserPlus, Eye, Trash2, Camera } from "lucide-react";
 import { Link } from "wouter";
 
 export default function StudentsPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [faceDialogOpen, setFaceDialogOpen] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
+  const [studentFaceData, setStudentFaceData] = useState<string | null>(null);
+  const [existingStudentFaceData, setExistingStudentFaceData] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: students = [], isLoading } = useQuery<StudentLite[]>({
@@ -52,7 +65,10 @@ export default function StudentsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertStudent) => {
-      const res = await apiRequest("POST", "/api/students", data);
+      const res = await apiRequest("POST", "/api/students", {
+        ...data,
+        faceData: studentFaceData,
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -60,6 +76,7 @@ export default function StudentsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       setDialogOpen(false);
       form.reset();
+      setStudentFaceData(null);
       toast({ title: "Eleve ajoute avec succes" });
     },
     onError: (error: Error) => {
@@ -81,6 +98,35 @@ export default function StudentsPage() {
     },
   });
 
+  const updateFaceMutation = useMutation({
+    mutationFn: async ({ studentId, faceData }: { studentId: string; faceData: string }) => {
+      const res = await apiRequest("PATCH", `/api/students/${studentId}/face`, { faceData });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/students"] });
+      setFaceDialogOpen(false);
+      setSelectedStudentId("");
+      setExistingStudentFaceData(null);
+      toast({ title: "Face ID ajoute avec succes" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur lors de l'ajout du face ID", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleAddFace = () => {
+    if (!selectedStudentId || !existingStudentFaceData) {
+      toast({ 
+        title: "Erreur", 
+        description: "Veuillez selectionner un eleve et capturer son visage",
+        variant: "destructive" 
+      });
+      return;
+    }
+    updateFaceMutation.mutate({ studentId: selectedStudentId, faceData: existingStudentFaceData });
+  };
+
   const filteredStudents = students.filter(
     (s) =>
       s.firstName.toLowerCase().includes(search.toLowerCase()) ||
@@ -97,13 +143,14 @@ export default function StudentsPage() {
             Gerer les fiches eleves et les inscriptions
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-student">
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter un eleve
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-student">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter un eleve
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Nouvel eleve</DialogTitle>
@@ -177,6 +224,15 @@ export default function StudentsPage() {
                     </FormItem>
                   )}
                 />
+                <FaceCapture
+                  onCapture={(imageData) => setStudentFaceData(imageData)}
+                  isLoading={createMutation.isPending}
+                />
+                {studentFaceData && (
+                  <div className="text-xs text-emerald-600 bg-emerald-50 p-2 rounded">
+                    ✓ Visage enregistre avec succes
+                  </div>
+                )}
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-student">
                   {createMutation.isPending ? "Ajout..." : "Ajouter l'eleve"}
                 </Button>
@@ -184,6 +240,63 @@ export default function StudentsPage() {
             </Form>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={faceDialogOpen} onOpenChange={setFaceDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline">
+              <Camera className="h-4 w-4 mr-2" />
+              Ajouter eleve face
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Ajouter Face ID</DialogTitle>
+              <DialogDescription>
+                Selectionnez un eleve existant et capturez son visage pour activer la connexion par Face ID
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Selectionner un eleve</label>
+                <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choisir un eleve" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {students.map((student) => (
+                      <SelectItem key={student.id} value={String(student.id)}>
+                        {student.firstName} {student.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {selectedStudentId && (
+                <>
+                  <FaceCapture
+                    onCapture={(imageData) => setExistingStudentFaceData(imageData)}
+                    isLoading={updateFaceMutation.isPending}
+                  />
+                  {existingStudentFaceData && (
+                    <div className="text-xs text-emerald-600 bg-emerald-50 p-2 rounded">
+                      ✓ Visage enregistre avec succes
+                    </div>
+                  )}
+                </>
+              )}
+              
+              <Button 
+                onClick={handleAddFace} 
+                className="w-full" 
+                disabled={updateFaceMutation.isPending || !selectedStudentId || !existingStudentFaceData}
+              >
+                {updateFaceMutation.isPending ? "Enregistrement..." : "Enregistrer Face ID"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        </div>
       </div>
 
       <div className="relative max-w-sm">

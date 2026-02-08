@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { FaceCapture } from "@/components/face-capture";
 import {
   Plus,
   Trash2,
@@ -80,6 +81,7 @@ export default function UserManagement() {
   const [selectedTrainer, setSelectedTrainer] = useState<UserData | null>(null);
   const [assignTrainingId, setAssignTrainingId] = useState("");
   const [selectedTrainings, setSelectedTrainings] = useState<string[]>([]);
+  const [trainerFaceData, setTrainerFaceData] = useState<string | null>(null);
 
   const form = useForm<TrainerFormValues>({
     resolver: zodResolver(trainerSchema),
@@ -112,6 +114,7 @@ export default function UserManagement() {
         ...data,
         role: "trainer",
         studentId: null,
+        faceData: trainerFaceData,
       });
       const created = await res.json();
       if (selectedTrainings.length > 0) {
@@ -132,6 +135,7 @@ export default function UserManagement() {
       setDialogOpen(false);
       form.reset();
       setSelectedTrainings([]);
+      setTrainerFaceData(null);
       toast({ title: "Encadrant ajoute avec succes" });
     },
     onError: (err: any) => {
@@ -247,6 +251,15 @@ export default function UserManagement() {
                 <div className="text-xs text-muted-foreground">
                   Le mot de passe est genere automatiquement et envoye par email.
                 </div>
+                <FaceCapture
+                  onCapture={(imageData) => setTrainerFaceData(imageData)}
+                  isLoading={createTrainerMutation.isPending}
+                />
+                {trainerFaceData && (
+                  <div className="text-xs text-emerald-600 bg-emerald-50 p-2 rounded">
+                    ✓ Visage enregistre avec succes
+                  </div>
+                )}
                 <div className="space-y-2">
                   <FormLabel>Formations a enseigner</FormLabel>
                   <p className="text-xs text-muted-foreground">Selectionnez une ou plusieurs formations</p>

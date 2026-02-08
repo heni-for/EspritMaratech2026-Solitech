@@ -114,6 +114,7 @@ export const users = pgTable("users", {
   fullName: text("full_name").notNull(),
   role: text("role").notNull().default("student"),
   studentId: integer("student_id"),
+  faceData: text("face_data"),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -122,6 +123,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   fullName: true,
   role: true,
   studentId: true,
+  faceData: true,
 });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;

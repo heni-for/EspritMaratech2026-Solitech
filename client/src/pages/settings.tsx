@@ -211,11 +211,7 @@ export default function SettingsPage() {
       id: "semantic",
       title: "Structure semantique (H1, H2, H3)",
       how: "Chaque page a un titre principal et des sections hierarchisees.",
-      example: (
-        <div className="text-xs text-muted-foreground">
-          H1: Tableau de bord &bull; H2: Formations &bull; H3: Niveau 2
-        </div>
-      ),
+      example: null,
     },
     {
       id: "keyboard",

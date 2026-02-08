@@ -636,7 +636,8 @@ export async function registerRoutes(
   });
 
   app.post("/api/students", requireRole("admin"), async (req, res) => {
-    const parsed = insertStudentSchema.safeParse(req.body);
+    const { faceData, ...studentData } = req.body;
+    const parsed = insertStudentSchema.safeParse(studentData);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const email = parsed.data.email?.trim();
     if (email) {
@@ -658,7 +659,8 @@ export async function registerRoutes(
         fullName: `${student.firstName} ${student.lastName}`,
         role: "student",
         studentId: student.id,
-      });
+        faceData: faceData || undefined,
+      } as any);
 
       const mailer = getMailer();
       if (mailer) {
@@ -682,6 +684,39 @@ export async function registerRoutes(
     }
 
     res.status(201).json({ ...student, emailSent });
+  });
+
+  app.patch("/api/students/:id/face", requireRole("admin"), async (req, res) => {
+    const studentId = asStorageId(req.params.id);
+    const { faceData } = req.body;
+
+    console.log(`[Face Update] Student ID: ${studentId}, Face data length: ${faceData?.length || 0}`);
+
+    if (!faceData || typeof faceData !== "string") {
+      return res.status(400).json({ message: "Face data is required" });
+    }
+
+    const student = await storage.getStudent(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    // Find the user account associated with this student
+    const allUsers = await storage.getUsers();
+    const userAccount = allUsers.find((u: any) => u.studentId === studentId);
+    
+    if (!userAccount) {
+      return res.status(404).json({ message: "No user account found for this student" });
+    }
+
+    console.log(`[Face Update] Found user account: ${userAccount.username}`);
+
+    // Update the user's face data
+    const updatedUser = await storage.updateUser(userAccount.id, { faceData });
+
+    console.log(`[Face Update] Updated user, faceData saved: ${!!updatedUser?.faceData}`);
+
+    res.json({ message: "Face ID added successfully", user: { id: updatedUser?.id, hasFaceData: !!updatedUser?.faceData } });
   });
 
   app.delete("/api/students/:id", requireRole("admin"), async (req, res) => {
@@ -1720,5 +1755,129 @@ export async function registerRoutes(
     });
   });
 
+  // ─── Face Recognition (Login) ───
+  app.post("/api/face-login", async (req, res) => {
+    const { faceData } = req.body;
+    if (!faceData) {
+      return res.status(400).json({ message: "Face data is required" });
+    }
+
+    try {
+      // Parse the face data containing descriptor or image
+      const incomingData = JSON.parse(faceData);
+      const incomingDescriptor = incomingData.descriptor;
+      const incomingImage = incomingData.image;
+      const method = incomingData.method;
+      
+      console.log(`[Face Login] Incoming method: ${method}`);
+
+      // Get all users with face data
+      const allUsers = await storage.getUsers();
+      
+      let matchedUser = null;
+      const SIMILARITY_THRESHOLD = 0.6; // Euclidean distance threshold for ML
+      const IMAGE_SIMILARITY_THRESHOLD = 0.85; // Higher threshold for image-based matching
+      let bestDistance = Infinity;
+
+      for (const user of allUsers) {
+        const userFaceData = (user as any).faceData;
+        
+        if (userFaceData) {
+          try {
+            const storedData = JSON.parse(userFaceData);
+            const storedDescriptor = storedData.descriptor;
+            const storedImage = storedData.image;
+
+            // Try ML-based matching first
+            if (incomingDescriptor && storedDescriptor && Array.isArray(storedDescriptor)) {
+              const distance = calculateEuclideanDistance(incomingDescriptor, storedDescriptor);
+              console.log(`[Face Login] User ${user.username}: ML distance = ${distance.toFixed(3)}`);
+              
+              if (distance < SIMILARITY_THRESHOLD && distance < bestDistance) {
+                bestDistance = distance;
+                matchedUser = user;
+              }
+            } 
+            // Fallback to image-based matching if ML not available
+            else if (incomingImage && storedImage && method === "image-based") {
+              const similarity = calculateImageSimilarity(incomingImage, storedImage);
+              console.log(`[Face Login] User ${user.username}: Image similarity = ${similarity.toFixed(3)}`);
+              
+              if (similarity > IMAGE_SIMILARITY_THRESHOLD && similarity > bestDistance) {
+                bestDistance = similarity;
+                matchedUser = user;
+              }
+            }
+          } catch (err) {
+            console.error(`[Face Login] Error processing data for user ${user.username}:`, err);
+          }
+        }
+      }
+
+      if (!matchedUser) {
+        console.log(`[Face Login] No match found. Best distance/similarity: ${bestDistance.toFixed(3)}`);
+        return res.status(401).json({ message: "No matching face found" });
+      }
+
+      console.log(`[Face Login] Match found: ${matchedUser.username}`);
+
+      // Authenticate the matched user
+      req.session.userId = matchedUser.id;
+      req.session.role = matchedUser.role;
+
+      res.json({
+        id: matchedUser.id,
+        username: matchedUser.username,
+        fullName: matchedUser.fullName,
+        role: matchedUser.role,
+        studentId: matchedUser.studentId,
+      });
+    } catch (err: any) {
+      console.error("Face login error:", err);
+      res.status(500).json({ message: "Face recognition failed" });
+    }
+  });
+
   return httpServer;
+}
+
+// Helper function to calculate Euclidean distance between two descriptors
+function calculateEuclideanDistance(descriptor1: number[], descriptor2: number[]): number {
+  if (descriptor1.length !== descriptor2.length) {
+    throw new Error("Descriptors must have the same length");
+  }
+  
+  let sum = 0;
+  for (let i = 0; i < descriptor1.length; i++) {
+    const diff = descriptor1[i] - descriptor2[i];
+    sum += diff * diff;
+  }
+  
+  return Math.sqrt(sum);
+}
+
+// Helper function to compare two base64 images (fallback if ML fails)
+function calculateImageSimilarity(img1Base64: string, img2Base64: string): number {
+  try {
+    // Quick hash-based comparison for base64 strings
+    // This is a simple approach - in production, you'd want pixel-level comparison
+    const hash1 = Buffer.from(img1Base64).toString('base64').slice(0, 100);
+    const hash2 = Buffer.from(img2Base64).toString('base64').slice(0, 100);
+    
+    if (hash1 === hash2) {
+      return 1.0; // Identical
+    }
+    
+    // Simple Hamming-like distance
+    let matches = 0;
+    const minLen = Math.min(hash1.length, hash2.length);
+    for (let i = 0; i < minLen; i++) {
+      if (hash1[i] === hash2[i]) matches++;
+    }
+    
+    return matches / minLen;
+  } catch (err) {
+    console.error('[Face Login] Image similarity calculation error:', err);
+    return 0;
+  }
 }
