@@ -154,6 +154,72 @@ const mapGoogleEncoding = (contentType: string) => {
   return null;
 };
 
+const mapDigitsToWords = (text: string, language?: string) => {
+  const isArabic = (language || "").toLowerCase().startsWith("ar");
+  const digits = isArabic
+    ? ["\u0635\u0641\u0631", "\u0648\u0627\u062d\u062f", "\u0627\u062b\u0646\u0627\u0646", "\u062b\u0644\u0627\u062b\u0629", "\u0623\u0631\u0628\u0639\u0629", "\u062e\u0645\u0633\u0629", "\u0633\u062a\u0629", "\u0633\u0628\u0639\u0629", "\u062b\u0645\u0627\u0646\u064a\u0629", "\u062a\u0633\u0639\u0629"]
+    : ["zero", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"];
+  const percent = isArabic ? "\u0628\u0627\u0644\u0645\u0627\u0626\u0629" : "pour cent";
+  let out = text.replace(/%/g, ` ${percent}`);
+  out = out.replace(/\d/g, (d) => ` ${digits[Number(d)]} `);
+  return out.replace(/\s+/g, " ").trim();
+};
+
+const buildProfileSummary = (profile: any, language?: string, focusToday?: boolean) => {
+  if (!profile || !profile.student || !Array.isArray(profile.formations)) return "";
+  const isArabic = (language || "").toLowerCase().startsWith("ar");
+  const studentName = `${profile.student.firstName || ""} ${profile.student.lastName || ""}`.trim();
+  const totalAbsences = profile.formations.reduce((acc: number, f: any) => acc + (f.absentCount || 0), 0);
+  const attendance = Array.isArray(profile.attendanceHistory) ? profile.attendanceHistory : [];
+  const todayKey = new Date().toISOString().split("T")[0];
+  const todaySessions = attendance.filter((a: any) => a.date && String(a.date).startsWith(todayKey));
+  const statusMap = isArabic
+    ? { present: "\u062d\u0627\u0636\u0631", absent: "\u063a\u0627\u0626\u0628", not_marked: "\u063a\u064a\u0631 \u0645\u0639\u0644\u0645" }
+    : { present: "Présent", absent: "Absent", not_marked: "Non marquée" };
+
+  const formationLines = profile.formations.map((f: any) => {
+    const progress = f.totalSessions > 0 ? Math.round((f.attendedSessions / f.totalSessions) * 100) : f.progress || 0;
+    if (isArabic) {
+      return `- ${f.training?.name}: \u0627\u0644\u0645\u0633\u062a\u0648\u0649 \u0627\u0644\u062d\u0627\u0644\u064a ${f.currentLevel}, \u0646\u0633\u0628\u0629 \u0627\u0644\u062a\u0642\u062f\u0645 ${progress}%, \u0627\u0644\u063a\u064a\u0627\u0628\u0627\u062a ${f.absentCount}, \u0627\u0644\u062d\u0635\u0635 ${f.attendedSessions}/${f.totalSessions}`;
+    }
+    return `- ${f.training?.name}: niveau ${f.currentLevel}, progression ${progress}%, absences ${f.absentCount}, seances ${f.attendedSessions}/${f.totalSessions}`;
+  });
+
+  const todayLines =
+    todaySessions.length > 0
+      ? todaySessions.map((s: any) => `- ${s.trainingName} | ${s.levelName} | ${s.sessionTitle} | ${statusMap[s.status] || s.status}`).join("\n")
+      : isArabic
+      ? "- \u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0635\u0635 \u0645\u0633\u062c\u0644\u0629 \u0627\u0644\u064a\u0648\u0645"
+      : "- aucune seance enregistree aujourd'hui";
+
+  if (focusToday) {
+    const todayHeader = isArabic ? "\u062d\u0635\u0635 \u0627\u0644\u064a\u0648\u0645:" : "Seances aujourd'hui:";
+    return `${todayHeader}\n${todayLines}`;
+  }
+
+  if (isArabic) {
+    return [
+      `\u0647\u0630\u0647 \u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0645\u0644\u0641\u0643:`,
+      `\u0627\u0644\u0627\u0633\u0645: ${studentName}`,
+      `\u0639\u062f\u062f \u0627\u0644\u063a\u064a\u0627\u0628\u0627\u062a \u0627\u0644\u0643\u0644\u064a: ${totalAbsences}`,
+      `\u0627\u0644\u062a\u0643\u0648\u064a\u0646\u0627\u062a:`,
+      formationLines.join("\n"),
+      `\u062d\u0635\u0635 \u0627\u0644\u064a\u0648\u0645:`,
+      todayLines,
+    ].join("\n");
+  }
+
+  return [
+    `Voici les informations de votre profil:`,
+    `Nom: ${studentName}`,
+    `Total absences: ${totalAbsences}`,
+    `Formations:`,
+    formationLines.join("\n"),
+    `Seances aujourd'hui:`,
+    todayLines,
+  ].join("\n");
+};
+
 const generatePassword = (length = 8) => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   const bytes = crypto.randomBytes(length);
@@ -180,7 +246,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  // ─── Auth ───
+  // --- Auth ---
   app.post("/api/auth/login", async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -236,7 +302,27 @@ export async function registerRoutes(
     });
   });
 
-  // ─── Users (Admin only) ───
+  // --- User Settings (per user) ---
+  app.get("/api/settings", requireAuth, async (req, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.json(user.settings || {});
+  });
+
+  app.put("/api/settings", requireAuth, async (req, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const current = user.settings || {};
+    const next = { ...current, ...req.body };
+    const updated = await storage.updateUser(user.id, { settings: next });
+    res.json(updated?.settings || next);
+  });
+
+  // --- Users (Admin only) ---
   app.get("/api/users", requireRole("admin"), async (_req, res) => {
     const allUsers = await storage.getUsers();
     const safeUsers = allUsers.map((u) => ({
@@ -504,7 +590,194 @@ export async function registerRoutes(
     return res.status(400).json({ message: "Unsupported provider" });
   });
 
-  // ─── Trainer Assignments (Admin only) ───
+  // AI Assistant (Groq)
+  app.post("/api/ai/chat", requireAuth, async (req, res) => {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ message: "GROQ_API_KEY not configured" });
+    }
+
+    const { messages, context, language, profile, intent } = req.body as {
+      messages?: Array<{ role: "user" | "assistant"; content: string }>;
+      context?: string;
+      language?: string;
+      profile?: any;
+      intent?: string;
+    };
+
+    const safeMessages = Array.isArray(messages) ? messages.slice(-10) : [];
+    const latestUser = safeMessages.filter((m) => m.role === "user").slice(-1)[0]?.content || "";
+    const lower = latestUser.toLowerCase();
+    const handleIntent = () => {
+      if (!profile || !intent) return null;
+      const isArabicIntent = (language || "").toLowerCase().startsWith("ar");
+      const formations = Array.isArray(profile.formations) ? profile.formations : [];
+      const formationsCount = formations.length;
+      const totalAbsences = formations.reduce((acc: number, f: any) => acc + (f.absentCount || 0), 0);
+      const avgProgress = formationsCount > 0
+        ? Math.round(
+            formations.reduce((acc: number, f: any) => {
+              const progress = f.totalSessions > 0 ? Math.round((f.attendedSessions / f.totalSessions) * 100) : f.progress || 0;
+              return acc + progress;
+            }, 0) / formationsCount
+          )
+        : 0;
+
+      if (intent === "name") {
+        const reply = isArabicIntent
+          ? `\u0627\u0633\u0645\u0643 \u0647\u0648 ${profile.student?.firstName || ""} ${profile.student?.lastName || ""}`.trim()
+          : `Ton nom est ${profile.student?.firstName || ""} ${profile.student?.lastName || ""}`.trim();
+        return mapDigitsToWords(reply, language);
+      }
+      if (intent === "lastFormation") {
+        const last = formations[formations.length - 1];
+        const name = last?.training?.name || "-";
+        const reply = isArabicIntent ? `\u0627\u062e\u0631 \u0641\u0648\u0631\u0645\u0627\u0633\u064a\u0648\u0646 \u0647\u064a ${name}.` : `Ta derni�re formation est ${name}.`;
+        return mapDigitsToWords(reply, language);
+      }
+      if (intent === "formationsCount") {
+        const reply = isArabicIntent
+          ? `\u0639\u062f\u062f \u0627\u0644\u0641\u0648\u0631\u0645\u0627\u0633\u064a\u0648\u0646\u0627\u062a \u0627\u0644\u0644\u064a \u062f\u0627\u062e\u0644 \u0641\u064a\u0647\u0645 \u0647\u0648 ${formationsCount}.`
+          : `Tu as ${formationsCount} formations.`;
+        return mapDigitsToWords(reply, language);
+      }
+      if (intent === "absencesCount") {
+        const reply = isArabicIntent
+          ? `\u0639\u062f\u062f \u0627\u0644\u063a\u064a\u0627\u0628\u0627\u062a \u0627\u0644\u0643\u0644\u064a \u0647\u0648 ${totalAbsences}.`
+          : `Ton total d'absences est ${totalAbsences}.`;
+        return mapDigitsToWords(reply, language);
+      }
+      if (intent === "progressOpinion") {
+        const reply = isArabicIntent
+          ? `\u062a\u0642\u062f\u0645\u0643 \u0627\u0644\u0639\u0627\u0645 \u062a\u0642\u0631\u064a\u0628\u0627 ${avgProgress} \u0628\u0627\u0644\u0645\u0627\u0626\u0629.`
+          : `Ta progression moyenne est ${avgProgress} pour cent.`;
+        return mapDigitsToWords(reply, language);
+      }
+      if (intent === "day") {
+        const daysFr = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+        const daysAr = ["\u0627\u0644\u0623\u062d\u062f", "\u0627\u0644\u0627\u062b\u0646\u064a\u0646", "\u0627\u0644\u062b\u0644\u0627\u062b\u0627\u0621", "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621", "\u0627\u0644\u062e\u0645\u064a\u0633", "\u0627\u0644\u062c\u0645\u0639\u0629", "\u0627\u0644\u0633\u0628\u062a"];
+        const dayName = isArabicIntent ? daysAr[new Date().getDay()] : daysFr[new Date().getDay()];
+        const reply = isArabicIntent ? `\u0627\u0644\u0646\u0647\u0627\u0631 \u0627\u0644\u064a\u0648\u0645 \u0647\u0648 ${dayName}.` : `Nous sommes ${dayName}.`;
+        return mapDigitsToWords(reply, language);
+      }
+      if (intent === "currentLevel") {
+        const levels = formations.map((f: any) => `${f.training?.name}: ${f.currentLevel}`);
+        const reply = isArabicIntent
+          ? `\u0627\u0644\u0645\u0633\u062a\u0648\u0649 \u0627\u0644\u062d\u0627\u0644\u064a: ${levels.join("\u060c ")}.`
+          : `Niveau actuel: ${levels.join(", ")}.`;
+        return mapDigitsToWords(reply, language);
+      }
+      if (intent === "todaySessions") {
+        const summary = buildProfileSummary(profile, language, true);
+        return mapDigitsToWords(summary, language);
+      }
+      if (intent === "nextFormation") {
+        const reply = isArabicIntent
+          ? "\u0645\u0627 \u0639\u0646\u062f\u064a\u0634 \u062a\u0648\u0642\u064a\u062a\u0627\u062a \u0645\u062d\u062f\u062f\u0629 \u0644\u0644\u0641\u0631\u0645\u0627\u0633\u064a\u0648\u0646 \u0627\u0644\u062c\u0627\u064a\u0629 \u0641\u064a \u0645\u0644\u0641\u0643."
+          : "Je n'ai pas d'horaires precis pour la prochaine formation dans votre profil.";
+        return reply;
+      }
+      return null;
+    };
+
+    const intentReply = handleIntent();
+    if (intentReply) {
+      return res.json({ reply: intentReply });
+    }
+    const hasAny = (text: string, terms: string[]) => terms.some((t) => text.includes(t));
+    const wantsProfile =
+      /profil|profile|mes cours|mes formations|mon niveau|progression|absen|seance|session|aujourd|today|toutes les informations/.test(lower) ||
+      hasAny(latestUser, [
+        "\u0643\u0648\u0631",
+        "\u0643\u0648\u0631\u0633",
+        "\u0641\u0648\u0631\u0645\u0627\u0633\u064a\u0648\u0646",
+        "\u062a\u0643\u0648\u064a\u0646",
+        "\u0645\u0633\u062a\u0648\u0649",
+        "\u0645\u0633\u062a\u0648\u0627\u064a",
+        "\u063a\u064a\u0627\u0628",
+        "\u0627\u0644\u062d\u0635\u0635",
+        "\u0627\u0644\u062d\u0635\u0629",
+        "\u0628\u0631\u0648\u0641\u0627\u064a\u0644\u064a",
+        "\u0628\u0631\u0648\u0641\u0627\u064a\u0644",
+        "\u0628\u0631\u0648\u0641\u064a\u0644",
+        "\u0643\u0644 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062a",
+        "\u0627\u0633\u0645\u064a",
+        "\u0634\u0646\u064a\u0629 \u0627\u0633\u0645\u064a",
+        "\u0634\u0646\u064a \u0647\u064a \u0627\u0633\u0645\u064a"
+      ]);
+    const wantsToday =
+      /aujourd|today/.test(lower) || hasAny(latestUser, ["\u0627\u0644\u064a\u0648\u0645", "\u062a\u0648\u0627", "\u0636\u0648\u064a\u0643\u0627"]);
+
+    const isArabic = (language || "").toLowerCase().startsWith("ar");
+    const respondsTime =
+      /heure|time/.test(lower) || hasAny(latestUser, ["\u0642\u062f\u0627\u0634 \u0627\u0644\u0648\u0642\u062a", "\u0627\u0644\u0648\u0642\u062a", "\u0627\u0644\u0633\u0627\u0639\u0629", "\u0634\u0646\u0648 \u0627\u0644\u0648\u0642\u062a"]);
+
+    if (respondsTime) {
+      const now = new Date();
+      const time = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+      const reply = isArabic ? `\u0627\u0644\u062a\u0648\u0642\u064a\u062a \u062a\u0648\u0627 ${time}` : `Il est ${time}`;
+      return res.json({ reply: mapDigitsToWords(reply, language) });
+    }
+
+    if (profile && (wantsProfile || wantsToday)) {
+      const summary = buildProfileSummary(profile, language, wantsToday);
+      if (summary) {
+        const reply = mapDigitsToWords(summary, language);
+        return res.json({ reply });
+      }
+    }
+    if (!profile && wantsProfile) {
+      const fallback = (language || "").toLowerCase().startsWith("ar")
+        ? "\u0645\u0627 \u0646\u062c\u0645\u0634 \u0646\u0648\u0635\u0644 \u0644\u0645\u0644\u0641\u0643. \u0644\u0627\u0632\u0645 \u062a\u062f\u062e\u0644 \u0628\u062d\u0633\u0627\u0628 \u0637\u0627\u0644\u0628."
+        : "Je n'ai pas acces a votre profil. Connectez-vous en tant qu'etudiant.";
+      return res.json({ reply: fallback });
+    }
+
+    const sys = [
+      "Tu es un assistant IA professionnel, chaleureux et clair pour un eleve.",
+      "Ta priorite est d'utiliser les informations du profil eleve donnees dans le contexte pour repondre.",
+      "Si l'utilisateur demande ses cours, son niveau, ses absences, ses seances, son planning ou sa progression, reponds UNIQUEMENT avec les donnees du contexte.",
+      "Si une information demandee n'existe pas dans le contexte, dis-le clairement et propose une action simple (ex: demander a l'administration ou mettre a jour les presences).",
+      "Reponds avec politesse et structure: reponse courte, detail utile, question de suivi.",
+      "Reponds dans la meme langue que l'utilisateur. Si le message est en arabe, reponds en arabe uniquement.",
+      "Evite les longues phrases; utilise des points clairs.",
+      "N'utilise aucun chiffre ni nombre en format numerique. Ecris toujours les nombres en lettres.",
+      context ? `Contexte eleve:\n${context}` : "",
+      language ? `Langue preferee: ${language}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const payload = {
+      model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: sys },
+        ...safeMessages,
+      ],
+    };
+
+    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      return res.status(500).json({ message: errText || "Groq request failed" });
+    }
+
+    const data = await resp.json();
+    const rawReply = data?.choices?.[0]?.message?.content || "";
+    const reply = mapDigitsToWords(rawReply, language);
+    return res.json({ reply });
+  });
+
+  // --- Trainer Assignments (Admin only) ---
   app.get("/api/trainer-assignments", requireRole("admin"), async (_req, res) => {
     const allAssignments = await storage.getAllTrainerAssignments();
     const enriched = await Promise.all(
@@ -544,7 +817,7 @@ export async function registerRoutes(
     res.json({ message: "Assignment removed" });
   });
 
-  // ─── Students ───
+  // --- Students ---
   app.get("/api/students", requireRole("admin", "trainer"), async (req, res) => {
     const allStudents = await storage.getStudents();
 
@@ -692,7 +965,7 @@ export async function registerRoutes(
     res.json({ message: "Student deleted" });
   });
 
-  // ─── Complaints ───
+  // --- Complaints ---
   app.post("/api/complaints", requireRole("trainer"), async (req, res) => {
     const { studentId, message } = req.body;
     if (!studentId || !message || typeof message !== "string") {
@@ -746,7 +1019,7 @@ export async function registerRoutes(
     res.json(enriched);
   });
 
-  // ─── Trainings ───
+  // --- Trainings ---
   app.get("/api/trainings", requireAuth, async (req, res) => {
     if (req.session.role === "trainer") {
       const assignments = await storage.getTrainerAssignments(req.session.userId!);
@@ -863,7 +1136,7 @@ export async function registerRoutes(
     res.status(201).json(training);
   });
 
-  // ─── Enrollments ───
+  // --- Enrollments ---
   app.post("/api/enrollments", requireRole("admin"), async (req, res) => {
     const { studentId, trainingId } = req.body;
     if (!studentId || !trainingId) {
@@ -890,7 +1163,7 @@ export async function registerRoutes(
     res.status(201).json(enrollment);
   });
 
-  // ─── Attendance ───
+  // --- Attendance ---
   app.get("/api/attendance/options", requireRole("admin", "trainer"), async (req, res) => {
     let trainingsList;
     if (req.session.role === "trainer") {
@@ -1047,7 +1320,7 @@ export async function registerRoutes(
     res.json(results);
   });
 
-  // ─── Certificates ───
+  // --- Certificates ---
   app.get("/api/certificates", requireRole("admin"), async (_req, res) => {
     const certs = await storage.getCertificates();
     const enriched = await Promise.all(
@@ -1137,7 +1410,7 @@ export async function registerRoutes(
     res.status(201).json(cert);
   });
 
-  // ─── Student self-service endpoints ───
+  // --- Student self-service endpoints ---
   app.get("/api/my/dashboard", requireRole("student"), async (req, res) => {
     const user = await storage.getUser(req.session.userId!);
     if (!user || !user.studentId) {
@@ -1235,7 +1508,52 @@ export async function registerRoutes(
     });
   });
 
-  app.get("/api/my/trainings", requireRole("student"), async (req, res) => {
+  
+  app.post("/api/my/certificates/last/email", requireRole("student"), async (req, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || !user.studentId) {
+      return res.status(400).json({ message: "No student profile linked" });
+    }
+    const student = await storage.getStudent(user.studentId);
+    if (!student?.email) {
+      return res.status(400).json({ message: "Student email not found" });
+    }
+    const certs = await storage.getCertificatesByStudent(user.studentId);
+    if (!certs || certs.length === 0) {
+      return res.status(404).json({ message: "No certificates available" });
+    }
+    const latest = certs
+      .slice()
+      .sort((a: any, b: any) => String(a.issuedAt || a.issuedDate || "").localeCompare(String(b.issuedAt || b.issuedDate || "")))
+      .pop();
+    const training = await storage.getTraining(latest.trainingId);
+    const trainingName = training?.name || "Training";
+    const certNumber = latest.certificateNumber || "N/A";
+    const issuedAt = latest.issuedAt || latest.issuedDate || "";
+
+    const mailer = getMailer();
+    if (!mailer) {
+      return res.status(400).json({ message: "SMTP not configured" });
+    }
+
+    const html = `
+      <div style="font-family:Arial,sans-serif">
+        <h2>Certificate</h2>
+        <p>Student: ${student.firstName} ${student.lastName}</p>
+        <p>Training: ${trainingName}</p>
+        <p>Certificate number: ${certNumber}</p>
+        <p>Issued at: ${issuedAt}</p>
+      </div>
+    `;
+
+    await mailer.sendMail({
+      to: student.email,
+      subject: `Certificate - ${trainingName}`,
+      html,
+    });
+
+    res.json({ message: "Email sent" });
+  });app.get("/api/my/trainings", requireRole("student"), async (req, res) => {
     const user = await storage.getUser(req.session.userId!);
     if (!user || !user.studentId) {
       return res.status(400).json({ message: "No student profile linked" });
@@ -1353,7 +1671,7 @@ export async function registerRoutes(
     res.json(rows);
   });
 
-  // ─── Trainer dashboard ───
+  // --- Trainer dashboard ---
   app.get("/api/trainer/dashboard", requireRole("trainer"), async (req, res) => {
     const assignments = await storage.getTrainerAssignments(req.session.userId!);
     const assignedTrainings = [];
@@ -1391,7 +1709,7 @@ export async function registerRoutes(
     res.json({ assignedTrainings });
   });
 
-  // ─── Dashboard (Admin) ───
+  // --- Dashboard (Admin) ---
   app.get("/api/dashboard/stats", requireRole("admin"), async (_req, res) => {
     const totalStudents = await storage.getStudentCount();
     const activeTrainings = await storage.getActiveTrainingCount();

@@ -10,8 +10,11 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AssistantDialog } from "@/components/ai/assistant-dialog";
 import { useEffect, useState } from "react";
 import { applyAccessibility, defaultAccessibility, loadAccessibility, saveAccessibility } from "@/lib/accessibility";
+import { apiRequest } from "@/lib/queryClient";
+import { browserTtsSpeak } from "@/lib/speech";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
@@ -97,6 +100,88 @@ function AuthenticatedApp() {
     applyAccessibility(a11y);
   }, [a11y]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent?.detail) {
+        setA11y((prev) => ({ ...prev, ...customEvent.detail }));
+      }
+    };
+    window.addEventListener("astba-settings-updated", handler);
+    return () => {
+      window.removeEventListener("astba-settings-updated", handler);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const loadServerSettings = async () => {
+      try {
+        const res = await apiRequest("GET", "/api/settings");
+        const serverSettings = await res.json();
+        if (cancelled) return;
+        const merged = { ...defaultAccessibility, ...serverSettings };
+        setA11y(merged);
+      } catch {
+        // keep local settings if server fetch fails
+      }
+    };
+    loadServerSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!a11y.screenDisplay) {
+      window.speechSynthesis?.cancel();
+      return;
+    }
+
+    const getReadableText = (el: HTMLElement | null) => {
+      if (!el) return "";
+      if (el.closest("[data-no-tts='true']")) return "";
+      const ariaLabel = el.getAttribute("aria-label");
+      if (ariaLabel) return ariaLabel.trim();
+      const title = el.getAttribute("title");
+      if (title) return title.trim();
+      if (el instanceof HTMLImageElement) {
+        const alt = el.getAttribute("alt");
+        if (alt) return alt.trim();
+      }
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+        const label = el.getAttribute("aria-label") || el.getAttribute("placeholder");
+        if (label) return label.trim();
+      }
+      const text = el.textContent?.replace(/\s+/g, " ").trim() || "";
+      return text;
+    };
+
+    const detectLang = (text: string) => {
+      const hasArabic = /[\u0600-\u06FF]/.test(text);
+      return hasArabic ? "ar-SA" : "fr-FR";
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const text = getReadableText(target) || getReadableText(target.closest("button, a, label, [role='button']") as HTMLElement);
+      if (!text) return;
+      const clipped = text.length > 200 ? `${text.slice(0, 200)}...` : text;
+      try {
+        browserTtsSpeak(clipped, detectLang(clipped));
+      } catch {
+        // Ignore TTS errors to avoid blocking UI
+      }
+    };
+
+    document.addEventListener("click", handleClick, true);
+    return () => {
+      document.removeEventListener("click", handleClick, true);
+    };
+  }, [a11y.screenDisplay]);
+
   const style = {
     "--sidebar-width": "4rem",
     "--sidebar-width-icon": "4rem",
@@ -111,6 +196,7 @@ function AuthenticatedApp() {
           <header className="flex items-center justify-between gap-2 p-2 border-b bg-background sticky top-0 z-50">
             <SidebarTrigger className="lg:hidden" />
             <div className="flex items-center justify-end gap-2 ml-auto">
+              <AssistantDialog />
               <Button variant="ghost" size="sm" className="gap-2" data-testid="button-profile">
                 <User className="h-4 w-4" />
                 Profil

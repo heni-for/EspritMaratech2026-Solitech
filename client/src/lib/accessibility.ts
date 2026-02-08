@@ -5,6 +5,7 @@ export type AccessibilitySettings = {
   strongFocus: boolean;
   statusDisplay: "text" | "color";
   iconLabels: boolean;
+  screenDisplay: boolean;
 };
 
 const STORAGE_KEY = "astba_accessibility";
@@ -16,6 +17,7 @@ export const defaultAccessibility: AccessibilitySettings = {
   strongFocus: true,
   statusDisplay: "color",
   iconLabels: true,
+  screenDisplay: false,
 };
 
 export function loadAccessibility(): AccessibilitySettings {
@@ -54,4 +56,5 @@ export function applyAccessibility(settings: AccessibilitySettings) {
   root.toggleAttribute("data-strong-focus", settings.strongFocus);
   root.setAttribute("data-status-display", settings.statusDisplay);
   root.setAttribute("data-a11y-labels", settings.iconLabels ? "on" : "off");
+  root.setAttribute("data-screen-display", settings.screenDisplay ? "on" : "off");
 }

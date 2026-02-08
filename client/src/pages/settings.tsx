@@ -24,6 +24,23 @@ export default function SettingsPage() {
     const saved = loadAccessibility();
     setSettings(saved);
     applyAccessibility(saved);
+    let cancelled = false;
+    const loadServerSettings = async () => {
+      try {
+        const res = await apiRequest("GET", "/api/settings");
+        const serverSettings = await res.json();
+        if (cancelled) return;
+        const merged = { ...defaultAccessibility, ...serverSettings };
+        setSettings(merged);
+        applyAccessibility(merged);
+      } catch {
+        // ignore server errors, keep local settings
+      }
+    };
+    loadServerSettings();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const update = (patch: Partial<typeof settings>) => {
@@ -31,6 +48,10 @@ export default function SettingsPage() {
     setSettings(next);
     saveAccessibility(next);
     applyAccessibility(next);
+    window.dispatchEvent(new CustomEvent("astba-settings-updated", { detail: next }));
+    apiRequest("PUT", "/api/settings", next).catch(() => {
+      // ignore network errors for now
+    });
   };
 
   const [speechProvider, setSpeechProvider] = useState<"browser" | "azure" | "google">("browser");
@@ -204,6 +225,23 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
           </div>
+        </div>
+      ),
+    },
+    {
+      id: "screen-display",
+      title: "Screen display",
+      how: "Quand ce mode est actif, l'application lit a haute voix ce que vous touchez.",
+      example: (
+        <div className="flex items-center justify-between gap-4">
+          <div className="text-xs text-muted-foreground">
+            Ideal pour les utilisateurs malvoyants (lecture vocale au toucher).
+          </div>
+          <Switch
+            checked={settings.screenDisplay}
+            onCheckedChange={(v) => update({ screenDisplay: v })}
+            aria-label="Activer la lecture vocale au toucher"
+          />
         </div>
       ),
     },
