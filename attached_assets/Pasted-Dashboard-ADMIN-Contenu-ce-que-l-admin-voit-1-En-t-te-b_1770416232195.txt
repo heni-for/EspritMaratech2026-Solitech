@@ -1,0 +1,132 @@
+Dashboard ADMIN — Contenu (ce que l’admin voit)
+1) En-tête (barre du haut)
+
+Recherche rapide : élève / formation / certificat
+
+Notifications (ex: séances non marquées, élèves en retard)
+
+Accès rapide : + Ajouter élève, + Créer formation, Marquer présence
+
+2) Section “Statistiques rapides” (cards)
+
+4 à 6 cartes en haut, par exemple :
+
+Total élèves
+
+Formations actives
+
+Séances aujourd’hui / cette semaine
+
+Taux de présence (%)
+
+Éligibles certificat
+
+Certificats générés (mois)
+
+3) Section “Graphique” (au centre)
+
+Un graphe (ligne / barres) avec filtres Semaine/Mois :
+
+Présents vs absents par jour
+ou
+
+Progression moyenne par formation
+
+4) Section “Activité récente”
+
+Tableau des dernières actions :
+
+Dernières présences marquées (élève, formation, séance, statut)
+
+Dernières inscriptions
+
+Derniers certificats générés
+
+Bouton : Voir tout l’historique
+
+5) Bloc “Gestion principale” (menu ou raccourcis)
+
+Des boutons/tiles clairs :
+
+Gestion des élèves (CRUD)
+
+Gestion des formations
+
+Gestion des encadrants
+
+Inscriptions (enrollments)
+
+Présences
+
+Certificats
+
+6) Bloc “Alertes / Suivi”
+
+Une liste intelligente (très utile) :
+
+Élèves avec beaucoup d’absences
+
+Séances non marquées par un encadrant
+
+Élèves proches de la fin (il manque 1 séance) → à relancer
+
+Demandes de certificat / anomalies
+
+Dashboard ADMIN — Actions (ce que l’admin peut faire)
+A) Gestion élèves
+
+Ajouter / modifier / supprimer
+
+Voir profil élève + historique complet
+
+Voir progression + séances manquées
+
+B) Gestion formations
+
+Créer formation → auto-génère 4 niveaux × 6 séances
+
+Activer/désactiver une formation
+
+Modifier titre/description (optionnel)
+
+Consulter niveaux/séances
+
+C) Gestion encadrants (si activée)
+
+Ajouter/mettre à jour encadrant
+
+Assigner encadrant à une inscription/formation
+
+D) Inscriptions
+
+Inscrire un élève à une formation
+
+Changer statut : ACTIVE / DROPPED / COMPLETED (auto ou manuel)
+
+Voir liste des inscrits par formation
+
+E) Présences
+
+Accès total aux présences
+
+Corriger une présence (avec trace “modifié par”)
+
+Voir tableaux “séances manquées”
+
+F) Certification
+
+Voir éligibilité (auto)
+
+Générer certificat PDF (si éligible)
+
+Historique des certificats + lien PDF (MinIO)
+
+Annuler/régénérer certificat (optionnel selon règles)
+
+G) Paramètres & Accessibilité
+
+Choix langue FR/AR
+
+Mode contraste élevé, taille texte, réduire animations
+
+Gestion des rôles utilisateurs (admin crée comptes)

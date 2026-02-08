@@ -1,0 +1,121 @@
+Description de l’interface (style dashboard moderne)
+1) Structure générale
+
+Écran en 3 zones :
+
+Sidebar verticale à gauche (fine, icônes uniquement)
+
+Zone principale au centre (graphe + tableau)
+
+Colonne de résumé à droite (cartes, statistiques, actions rapides)
+
+Fond global clair (blanc cassé / gris très doux), avec des cartes arrondies et une sensation “clean / moderne”.
+
+2) Sidebar (gauche)
+
+Une barre verticale avec :
+
+Logo ASTBA en haut
+
+Icônes (avec tooltip au survol) :
+
+Dashboard
+
+Élèves
+
+Formations
+
+Présences
+
+Certificats
+
+Paramètres (Accessibilité)
+
+En bas : bouton déconnexion / profil
+
+Style : icônes simples, boutons ronds, état actif bien visible.
+
+3) Zone principale (centre)
+
+En haut : Bloc “Présences & Progression”
+
+Titre : Présences / Avancement
+
+Un graphe (ligne ou courbe) montrant :
+
+nombre présents / absents par jour
+
+ou progression moyenne par niveau
+
+Filtre rapide : Semaine / Mois / Tout
+
+En bas : Bloc “Activité récente”
+Tableau/listing avec :
+
+dernières séances marquées
+
+élève + formation + séance + statut (Présent/Absent)
+
+indicateur “séances manquées” (avec texte, pas seulement couleur)
+
+4) Colonne droite (résumé)
+
+Une zone de cartes verticales :
+
+Carte “Formation active”
+
+Nom de la formation sélectionnée
+
+Niveau actuel
+
+% progression
+
+mini badge “Éligible / Non éligible”
+
+Carte “Résumé rapide”
+
+Présents aujourd’hui
+
+Absents aujourd’hui
+
+Élèves éligibles certificat
+
+3 petites cartes KPI
+
+Cette semaine : total présences
+
+Ce mois : total séances effectuées
+
+À venir : prochaines séances planifiées
+
+Bouton principal
+
+“Marquer présence” (action rapide)
+
+ou “Générer certificat” (activé فقط إذا élève éligible)
+
+5) Style UI (comme l’image)
+
+Cartes blanches avec ombre douce + coins très arrondis
+
+Espacements larges (pas de surcharge)
+
+Typographie simple, titres clairs
+
+Icônes minimalistes
+
+Couleurs douces (accent couleur unique pour actions principales)
+
+6) Accessibilité intégrée (dans la même interface)
+
+Un menu “Accessibilité” (toujours accessible) :
+
+Contraste élevé (toggle)
+
+Taille texte A- / A / A+
+
+Mode simple (moins d’infos à l’écran)
+
+Réduire animations
+
+Pas d’information uniquement par couleur (badge texte + icône)
